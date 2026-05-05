@@ -1,0 +1,28 @@
+# pretrain_b02.yaml
+
+data:
+  raw_dir: "data/raw/B02"
+  processed_dir: "data/processed"
+  sampling_rate: 128000
+  patch_size: 1024 # Example: group 1024 points into one patch
+  stride: 512      # Overlapping
+  seq_len: 2048    # Sequence length after patching
+
+model:
+  cnn_out_channels: 64
+  mamba_d_model: 128
+  mamba_n_layer: 4
+  mamba_d_state: 16
+  mamba_d_conv: 4
+  mamba_expand: 2
+  forecast_len: 64
+
+training:
+  batch_size: 32
+  learning_rate: 1e-4
+  epochs: 50
+  device: "cuda"
+
+logging:
+  project_name: "Hybrid_Mamba_CNN_B02"
+  use_wandb: false

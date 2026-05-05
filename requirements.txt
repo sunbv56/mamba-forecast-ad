@@ -1,0 +1,12 @@
+torch>=2.0.0
+torchvision
+torchaudio
+causal-conv1d>=1.4.0
+scipy
+numpy
+pandas
+pyyaml
+tqdm
+wandb
+scikit-learn
+matplotlib
