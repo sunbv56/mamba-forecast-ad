@@ -14,36 +14,48 @@ class PositionalEncoding(nn.Module):
 
     def forward(self, x):
         # x: (batch_size, seq_len, d_model)
-        x = x + self.pe[:, :x.size(1)]
-        return x
+        seq_len = x.size(1)
+        d_model = x.size(2)
+        return x + self.pe[:, :seq_len, :d_model]
 
-class TransformerForecaster(nn.Module):
-    def __init__(self, input_dim=2, d_model=64, nhead=4, num_layers=2, dim_feedforward=256, dropout=0.1, horizon=512):
+class iTransformer(nn.Module):
+    """
+    iTransformer (Inverted Transformer) - ICLR 2024.
+    Treats each time series channel as a token and time points as features.
+    Effective for multivariate time series forecasting.
+    """
+    def __init__(self, input_dim=2, lookback=1024, d_model=64, nhead=4, num_layers=3, 
+                 dim_feedforward=256, dropout=0.1, horizon=512):
         super().__init__()
         self.input_dim = input_dim
         self.horizon = horizon
+        self.lookback = lookback
         
-        self.embedding = nn.Linear(input_dim, d_model)
-        self.pos_encoder = PositionalEncoding(d_model)
+        # Inverted embedding: maps temporal features to d_model
+        self.embedding = nn.Linear(lookback, d_model)
         
-        encoder_layer = nn.TransformerEncoderLayer(d_model=d_model, nhead=nhead, 
-                                                   dim_feedforward=dim_feedforward, 
-                                                   dropout=0.2, batch_first=True)
-        self.transformer_encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        # Standard Transformer Encoder
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=d_model, nhead=nhead, 
+            dim_feedforward=dim_feedforward, 
+            dropout=dropout, batch_first=True
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         
-        self.fc = nn.Linear(d_model, horizon * input_dim)
+        # Forecasting head: projects d_model back to horizon
+        self.head = nn.Linear(d_model, horizon)
         
     def forward(self, x):
         # x: (batch_size, input_dim, lookback)
-        x = x.transpose(1, 2) # (batch_size, lookback, input_dim)
         
-        x = self.embedding(x)
-        x = self.pos_encoder(x)
+        # In iTransformer, tokens = channels, features = lookback
+        # x is already (B, C, L), so we just project L -> d_model
+        x = self.embedding(x) # (batch_size, input_dim, d_model)
         
-        out = self.transformer_encoder(x) # (batch_size, lookback, d_model)
+        # Attend across channels
+        out = self.transformer(x) # (batch_size, input_dim, d_model)
         
-        last_out = out[:, -1, :] # Lấy token cuối cùng để dự báo
+        # Project each channel's feature back to horizon
+        pred = self.head(out) # (batch_size, input_dim, horizon)
         
-        pred = self.fc(last_out)
-        pred = pred.view(-1, self.input_dim, self.horizon)
         return pred
