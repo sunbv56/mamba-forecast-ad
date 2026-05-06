@@ -1,0 +1,66 @@
+\documentclass{ieeeaccess}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{textcomp}
+\usepackage{url}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+\history{Date of publication May 6, 2026, date of current version \today.}
+
+\title{Hybrid State-Space Models for Bearing Prognostics and Health Management: A Comparative Study}
+\author{\uppercase{Binh-Thuan Truong}\authorrefmark{1}}
+\address[1]{Ton Duc Thang University}
+
+
+\markboth
+{Nguyen \headeretal: Hybrid State-Space Models for Bearing Prognostics}
+{Nguyen \headeretal: Hybrid State-Space Models for Bearing Prognostics}
+
+\corresp{Corresponding author: Dinh-Danh Nguyen (e-mail: henry.41148@gmail.com).}
+
+\begin{abstract}
+Prognostics and Health Management (PHM) for rolling element bearings is critical for ensuring the reliability of rotating machinery. This paper explores the transition from signal-based feature extraction to end-to-end deep learning architectures for Health Index (HI) forecasting and anomaly detection. We benchmark several state-of-the-art models, including Long Short-Term Memory (LSTM), Temporal Convolutional Networks (TCN), and Transformers, under a strictly controlled parameter budget (200k--250k) to ensure architectural fairness. Furthermore, we propose a hybrid CNN-Mamba architecture that leverages local convolutional feature extraction and linear-time State-Space modeling. Our results, evaluated via AUROC, AUPRC, and inference latency, demonstrate that the Mamba-Hybrid approach provides superior precision in capturing accelerated degradation patterns while maintaining the efficiency required for real-time edge deployment.
+\end{abstract}
+
+
+\begin{keywords}
+Bearing Prognostics, Deep Learning, Health Index, Hybrid State-Space Models, Mamba, PHM, Remaining Useful Life (RUL), Rolling Element Bearings.
+\end{keywords}
+
+\titlepgskip=-15pt
+
+\maketitle
+
+\section{Literature Review}
+\label{sec:lit_review}
+\PARstart{T}{he} field of Prognostics and Health Management (PHM) for industrial components, particularly rolling element bearings, has undergone a significant transformation over the past decade. Rotating machinery is fundamental to modern industrial infrastructure, and bearing failure remains a primary cause of system downtime. Traditionally, bearing health monitoring relied on physical modeling and statistical signal processing. Time-domain features, such as Root Mean Square (RMS) and Kurtosis, have served as foundational health indicators due to their sensitivity to early-stage impulse faults and late-stage energy increases.
+
+A critical milestone in this domain was the introduction of the PRONOSTIA platform (FEMTO-ST dataset) which provided standardized vibration data under varying operating conditions, accelerating the development of Remaining Useful Life (RUL) estimation algorithms. Recent literature emphasizes the construction of a robust Health Index (HI) as a precursor to RUL prediction. While linear HI models were common, research has shown that degradation in mechanical components often follows an exponential trajectory, particularly in the final stages of failure. This led to the adoption of exponential Health Indices, defined as:
+\begin{equation}
+HI(t) = \frac{e^{\lambda} - e^{\lambda \cdot \frac{t}{T}}}{e^{\lambda} - 1}
+\label{eq:hi_model}
+\end{equation}
+where $\lambda$ represents the degradation rate. Such formulations allow models to prioritize the capturing of accelerated degradation patterns, which are crucial for timely maintenance alerts.
+
+\section{Related Work}
+\label{sec:related_work}
+Recent advancements in Deep Learning (DL) have introduced end-to-end architectures that bypass manual feature engineering. 
+
+\subsection{Recurrent Architectures}
+Long Short-Term Memory (LSTM) networks have been widely utilized for bearing RUL prediction due to their ability to capture temporal dependencies. However, LSTMs often struggle with vanishing gradients when processing high-frequency vibration signals over extended horizons.
+
+\subsection{Convolutional and Temporal Networks}
+Temporal Convolutional Networks (TCN) and modern variations like ModernTCN (ICLR 2024) have emerged as strong alternatives. By utilizing dilated convolutions and large kernel sizes, TCNs achieve a receptive field capable of capturing long-range patterns while maintaining parallelizable training, a significant advantage over sequential RNNs.
+
+\subsection{Attention-Based Models}
+Transformers have set new benchmarks in sequence modeling through the self-attention mechanism. Despite their global context awareness, the quadratic complexity $O(L^2)$ relative to sequence length $L$ poses significant challenges for real-time edge deployment in industrial IoT settings.
+
+\subsection{State-Space Models (SSMs)}
+The most recent frontier in this lineage is the Mamba architecture, a structured State-Space Model. Mamba achieves linear scaling $O(L)$ with sequence length while providing Transformer-level performance. Hybrid approaches, such as the CNN-Mamba architecture, combine the local feature extraction capabilities of Convolutional layers with the long-term dependency management of Selective State Space blocks. Our work builds upon this trend, benchmarking the Mamba-Hybrid architecture against established baselines under a standardized framework. By constraining all models to approximately 200k--250k parameters, we isolate the impact of architectural efficiency. Performance is rigorously measured across multiple dimensions, including Area Under the Receiver Operating Characteristic (AUROC), Area Under the Precision-Recall Curve (AUPRC), and inference latency (ms/sample), highlighting the Mamba-Hybrid's capacity for high-fidelity, real-time bearing diagnostics.
+
+\EOD
+\end{document}

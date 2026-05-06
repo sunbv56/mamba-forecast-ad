@@ -1,0 +1,1102 @@
+\documentclass{ieeeaccess}
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{textcomp}
+\usepackage{url}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+\history{Date of publication December 8, 2024, date of current version December 8, 2024.}
+
+\title{A Comprehensive Study, Implementation, and Survey of Pitch Detection Algorithms \\
+(December 2024)}
+\author{\uppercase{Dinh-Danh Nguyen}\authorrefmark{1},
+\uppercase{Vu-Tuong Nguyen\authorrefmark{1}, and Binh-Thuan Truong}\authorrefmark{1}.}
+\address[1]{Ton Duc Thang University}
+
+
+\markboth
+{Danh \headeretal: A Comprehensive Study, Implementation, and Survey of Pitch Detection Algorithms}
+{Danh \headeretal: A Comprehensive Study, Implementation, and Survey of Pitch Detection Algorithms}
+
+\corresp{Corresponding author: Dinh-Danh Nguyen (e-mail: henry.41148@gmail.com).}
+
+\begin{abstract}
+This paper presents a comprehensive study and implementation of prominent pitch detection algorithms (PDAs). We evaluate four key methods and their variants: the Autocorrelation Function (ACF) and its enhanced version (eACF), the One-Bit Pitch (OBP) method with its Self-Modified variant (SM-OBP), the YIN algorithm, and the deep learning-based PitchNet. Accuracy is measured across tolerance levels of 1\%, 2\%, 5\%, 8\%, and 10\%, accounting for deviations between predicted and actual fundamental frequencies ($f_0$). The algorithms are evaluated on diverse datasets, including the NSynth dataset (900 records), the SYNTHPITCH dataset (12 sub-files with varying harmonic and noise content), the AI-generated AlphabetSpeech dataset, and the SPEECH\_DATASET, a trimmed version of human speech recordings. Our detailed implementation and comparative analysis provide insights into the performance, strengths, and weaknesses of each PDA, highlighting their suitability for applications like speech processing and music information retrieval. This work serves as a valuable resource for researchers and practitioners exploring advanced pitch detection techniques.
+\end{abstract}
+
+
+\begin{keywords}
+Audio signal analysis, Autocorrelation Function (ACF), deep learning, enhanced Autocorrelation Function (eACF), fundamental frequency (f0), NSynth dataset, One-Bit Pitch (OBP), Pitch detection algorithms, PitchNet, Self-Modified OBP (SM-OBP), speech processing, SYNTHPITCH dataset,YIN algorithm 
+\end{keywords}
+
+\titlepgskip=-15pt
+
+\maketitle
+\section{Introduction}
+\label{sec:introduction}
+\PARstart{P}{itch} detection, the process of estimating the fundamental frequency (\(f_0\)) of an audio signal, is a cornerstone in applications such as music information retrieval and speech processing. Existing methods span from classical time-domain approaches like the Autocorrelation Function (ACF) to advanced deep learning techniques. Despite significant advancements, challenges persist, particularly in handling noisy environments and complex harmonic structures.
+
+This paper conducts a comparative analysis of four prominent pitch detection algorithm (PDA) families: ACF and its enhanced variant (eACF), the One-Bit Pitch (OBP) method along with a self-modified version (SM-OBP), the YIN algorithm, and the deep learning-based PitchNet.We evaluate these algorithms across various tolerance thresholds (1–10\%) using 4 different datasets, which encompass diverse harmonic and noise characteristics, ranging from instrumental data and raw noise to human voice recordings.
+
+\section{Background and related work}
+\subsection{Overview of Pitch Detection Techniques}
+Pitch detection algorithms have been extensively studied, with approaches broadly categorized into time-domain, frequency-domain, and deep learning-based methods. Time-domain methods, such as the Autocorrelation Function (ACF) \cite{b3}, offer computational simplicity and efficiency. However, they can be susceptible to noise and octave errors. Frequency-domain methods, including harmonic product spectrum (HPS) \cite{b8}, operate on the frequency representation of the signal, offering potential advantages in handling noise and harmonics. However, these methods may have their own limitations, such as increased computational complexity or sensitivity to the choice of analysis parameters.
+
+More recently, deep learning techniques have emerged as powerful tools for pitch detection. Deep neural networks (DNNs), such as PitchNet \cite{b5}, can learn complex patterns and representations from data, potentially offering improved robustness and accuracy. These models can be trained on large datasets of labeled audio, allowing them to capture subtle nuances of pitch perception and handle challenging scenarios like noisy environments and complex harmonic structures.
+
+\subsection{Discussion of Specific Algorithms}
+This work focuses on four specific PDA families. The ACF \cite{b3} calculates the correlation between a signal and its time-shifted version. Enhanced ACF (eACF) techniques \cite{b2} aim to improve robustness and accuracy. The One-Bit Pitch (OBP) method \cite{b7}, based on the compressed one-bit representation of the audio, offers computational efficiency. This paper proposes a self-modified OBP (SM-OBP) designed to improve detection accuracy and robustness under noisy conditions. The YIN algorithm \cite{b1} improves noise robustness compared to traditional ACF methods. Lastly, PitchNet \cite{b5} utilizes a deep learning architecture to extract pitch features and has shown promising results in various pitch detection applications.
+
+\subsection{Datasets and Evaluation Metrics}
+This study incorporates four datasets: NSynth, known for its diversity in instrument sounds; SYNTHPITCH, selected for its range of fundamental frequencies and controlled noise conditions; AlphabetSpeech, an AI-generated voice dataset; and SPEECH\_DATASET, a truncated version of longer human voice recordings. Performance is measured using raw pitch accuracy (RPA), with tolerances ranging from 1\% to 10\%, providing a nuanced analysis of the robustness of the evaluated algorithms.
+
+
+\section{Algorithms}
+\subsection{ ACF, \lowercase{w}ACF \& \lowercase{e}ACF}
+\subsubsection{ACF - Autocorrelation Function}
+The Autocorrelation Function (ACF) measures the correlation between a signal and its time-lagged version, widely used to detect periodicity, such as in pitch estimation for speech or music. The autocorrelation function for a stationary discrete signal $x(n)$ can be mathematically represented as:
+
+\begin{equation}
+\text{ACF}_{xx}(\tau) = \sum_{n=0}^{N-\tau-1} x(n) \cdot x(n+\tau)
+\label{eq:acf}
+\end{equation}
+
+where $x(n)$ represents the signal's array, $\tau$ is the time shift (lag), and $N$ is the signal's length. The summation is performed over the overlapping range of the signal and its shifted copy, from $n$ = 0 to $N - \tau - 1$.\\
+To apply the Autocorrelation Function (ACF) in signal analysis, we need to compute the ACF values for positive lags, from $\tau = 0, \tau = 1, \tau = 2, \dots$ to $\tau = \tau_{\text{max}}$. The maximum lag $\tau_{\text{max}}$ is calculated as:
+\begin{equation}
+\tau_{\text{max}} = \frac{f_s}{f_{\text{min}}}
+\label{eq:max_lag}
+\end{equation}
+where:
+\begin{itemize}
+    \item $f_s$: Sampling rate of the signal.
+    \item $f_{\text{min}}$: Minimum fundamental frequency to be detected.
+\end{itemize}
+
+The peaks in the Autocorrelation Function (ACF) represent the periodicity of the signal, as they indicate points where the time-shifted version of the signal aligns with itself.  
+The ACF has several important properties, such as $\text{ACF}(0) \geq \text{ACF}(\tau)$ and $0 \leq \text{ACF}(\tau)$,
+for all $\tau \geq 0$. Consequently, ACF is often normalized by dividing it by its value at $\tau = 0$, ensuring that the ACF values range between 0 and 1:
+\begin{equation}
+\text{ACF}_{xx}'(\tau) = \frac{\text{ACF}_{xx}(\tau)}{\text{ACF}_{xx}(0)}.
+\label{eq:normalized_acf}
+\end{equation}
+
+\subsubsection{wACF - Window ACF}
+
+The Windowed Autocorrelation Function (wACF) applies a window function (commonly the Hanning window) to focus the analysis on specific portions of the signal. In this approach, the signal is first divided into smaller overlapping or non-overlapping frames, each containing a segment of the signal. This division is particularly useful for non-stationary signals, such as speech, where the characteristics vary over time. For each frame, the window function is applied by multiplying the signal values within the frame with the corresponding window values, effectively tapering the edges of the frame to reduce discontinuities or edge effects. This process ensures that the analysis focuses on the local characteristics of the signal within each frame while mitigating the impact of environmental noise or signal variability.
+
+\begin{equation}
+x_{\text{w}}(n) = x(n) \cdot w(n).
+\label{eq:windowed_signal}
+\end{equation}
+
+
+\begin{equation}
+\text{wACF}_{xx}(t, \tau) = \sum_{n=0}^{N-\tau-1} x_{\text{w}}(n)\cdot x_{\text{w}}(n+\tau)
+\label{eq:wacf}
+\end{equation}
+
+
+\noindent where:
+\begin{itemize}
+    \item $\text{wACF}(t, \tau)$: The wACF value at frame $t$ and lag $\tau$.
+    \item $t$: The frame index. In signal analysis, signals are often divided into smaller frames, and $t$ is the index of the frame being analyzed.
+    \item $\tau$: The time lag (shift).
+    \item $x_{\text{w}}[n]$: The **windowed signal value** at time index $n$. The original signal $x[n]$ is multiplied by the window function $w[n]$ to reduce edge effects, producing the windowed signal.
+    \item $N$: The length of the windowed signal. This corresponds to the number of samples in the windowed signal, equivalent to the length of the array $x_{\text{w}}$.
+\end{itemize}
+
+Similar to \eqref{eq:acf}, the \eqref{eq:wacf} is normalized to ensure its values lie within the range $[0, 1]$:
+\begin{equation}
+\text{wACF}_{xx}'(t, \tau) = \frac{\text{wACF}_{xx}(t, \tau)}{\text{wACF}_{xx}(t, 0)}
+\label{eq:normalized_wacf}
+\end{equation}
+\subsubsection{Limitations of ACF and wACF}
+
+\paragraph{Tapering Effect:}
+When applying a window function in the computation of the Autocorrelation Function (ACF), the signal is subject to the tapering effect. Specifically, as the lag \(\tau\) increases, the autocorrelation values decrease. This tapering is particularly problematic for signals with low frequencies or long periods, as the autocorrelation becomes less effective at detecting such features. The primary cause of this tapering is the application of the window function, which attenuates signal values near the edges of the frame, leading to a loss of information for long lags. Consequently, this limits the ability of the wACF to reliably detect long periods, especially in signals like speech.
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\linewidth]{Tapering.png}  % Adjust the width to fit the page
+    \caption{Illustration of the tapering effect and its impact on long lags in the windowed autocorrelation function (wACF). The yellow line - eq. \eqref{eq:wacf} - gradually "taper", loses its wave shape in the high lags.}
+    \label{fig:tapering}
+    \label{eq:window_wacf}
+\end{figure}
+
+One method to minimize the effect of tapering is to divide the ACF of the windowed signal by the ACF of the window itself:
+
+\begin{equation}
+\text{wACF}'_{xx,w}(t, \tau) = \frac{\text{wACF}'_{xx}(t, \tau)}{\text{wACF}'_{ww}(t, \tau)}
+\label{eq:window_wacf}
+\end{equation}
+
+
+\paragraph{Overcompensation Effect:}
+However, \eqref{eq:window_wacf} sometime can overcompensate the 
+tapering, which can be considered as the Overcompensation effect (shown in Fig. \ref{fig:acf_curves}). A potential solution was proposed: First, calculate the value of $\text{wACF}'_{xx,w}(t, \tau)$ in eq. \eqref{eq:window_wacf}. If the result exceeds 1, it is replaced with its reciprocal. 
+
+\begin{equation}
+\text{wACF}'_{xx,w}(t, \tau) = \frac{1}{\text{wACF}'_{xx,w}(t, \tau)}.
+\end{equation}
+
+However, this replacement can lead to inaccuracies in the results. When the value of $r(t, k)$ becomes too large, inverting this value can cause the ACF to misrepresent the signal's characteristics, leading to errors in detecting the period or fundamental frequency. In some cases, this results in incorrect identification of signal features, especially when the signal has high noise levels or rapid changes.
+
+\subsubsection{eACF - Enhanced ACF}
+
+The Enhanced Autocorrelation Function (eACF) introduces a refinement over the windowed Autocorrelation Function (wACF) by incorporating a scaling factor $\beta$ into the normalization process. The eACF formula is expressed as:
+
+\begin{equation}
+\text{eACF}_{xx,w}(t, \tau) = \frac{\text{wACF}'_{xx}(t, \tau)}{\text{wACF}'_{ww}(t, \tau)^\beta}
+\label{eq:eacf}
+\end{equation}
+
+\noindent where:
+\begin{itemize}
+    \item $\text{wACF}'_{xx}(t, \tau)$ represents the windowed autocorrelation of the signal.
+    \item $\text{wACF}'_{ww}(t, \tau)$ is the weighted autocorrelation of the windowing function.
+    \item $\beta$ is a tunable parameter controlling the normalization strength.
+\end{itemize}
+
+This adjustment ensures that the eACF retains the benefits of the wACF while mitigating its limitations, offering a more reliable estimation of the fundamental frequency (f0) in diverse signal types.
+\begin{figure}[h!]
+    \centering
+    \includegraphics[width=\linewidth]{acf2.png}
+    \caption{Illustration of the impact of different autocorrelation function (ACF) processing methods on the signal's autocorrelation. The plot shows superimposed ACF curves for a synthetic signal containing four harmonics: \(f_0 = 200\ \text{Hz}\), \(f_1 = 400\ \text{Hz}\), \(f_2 = 600\ \text{Hz}\), and \(f_3 = 800\ \text{Hz}\). The signal has a duration of 0.05 seconds and is sampled at 8000 Hz. The ACF curves highlight the effect of those ACF, wACF and eACF on the long-term autocorrelation. The enhanced ACF (eACF) is computed with \(\beta = 0.8\). A Hann window, with the same length as the signal, is applied. The third chart (eq. \eqref{eq:window_wacf} ) has shown that it overcompensate the tapering in second chart - eq. \eqref{eq:wacf}, while the fourth chart of eACF\eqref{eq:eacf} balance between them, reduce tapering while avoid overcompensation.}
+    \label{fig:acf_curves}
+\end{figure}
+\subsection{OBP \& SM-OBP}
+\subsubsection{OBP - One-Bit Pitch}
+
+\paragraph{Description:}
+OneBitPitch (OBP) is a fundamental frequency ($F_0$) detection algorithm with high-speed performance, utilizing:
+\begin{itemize}
+    \item \textbf{1-bit quantization:} Converts the signal into a binary form to reduce complexity.
+    \item \textbf{Corrected Autocorrelation Function (ACF):} Identifies the signal's periodicity through the minima of the corrected autocorrelation function.
+\end{itemize}
+
+\paragraph{Formula:}
+\begin{equation}
+x_{\text{sign}}(n) =
+\begin{cases}
+1 & \text{if } x(n) \geq 0 \\
+0 & \text{if } x(n) < 0
+\end{cases}
+\label{eq:quantization}
+\end{equation}
+
+\begin{itemize}
+    \item \( x(n) \): Input signal.
+    \item \( x_{\text{sign}}(n) \): Signal after quantization.
+\end{itemize}
+
+\paragraph{Buffer}
+
+\paragraph{Description:}
+Stores the most recent signal samples. The buffer size depends on the sampling rate \( f_s \) and the minimum frequency \( f_{\text{min}} \).
+
+\paragraph{Formula:}
+\begin{equation}
+\text{Buffer length} = \frac{f_s}{f_{\text{min}}}
+\label{eq:buffer_length}
+\end{equation}
+
+\paragraph{Significance:}
+Ensures sufficient data for calculating the signal's period.
+
+\paragraph{Corrected Autocorrelation Function (ACF)}
+
+\paragraph{Description:}
+Rather than using the standard autocorrelation function (which finds the maxima), the algorithm finds the minima of the corrected autocorrelation function to determine the period.
+
+\paragraph{Formula:}
+\begin{equation}
+d_{xx}(l) = \sum_{k=1}^{N} |x(k) - x(k+l)|
+\label{eq:acf_obp}
+\end{equation}
+
+\begin{itemize}
+    \item \( x(k) \): Signal in the buffer.
+    \item \( l \): Lag.
+    \item \( N \): Number of samples in the buffer.
+\end{itemize}
+
+\paragraph{Significance:}
+\begin{itemize}
+    \item Independent of signal amplitude.
+    \item The minima of \( d_{xx}(l) \) correspond to the signal's period.
+\end{itemize}
+
+\paragraph{Fundamental Frequency Detection}
+
+\paragraph{Description:}
+Finds the distance between the minima to calculate the signal's period.
+
+\paragraph{Formula:}
+\begin{equation}
+F_0 = \frac{f_s}{T}
+\label{eq:fundamental_frequency}
+\end{equation}
+
+\begin{itemize}
+    \item \( T \): Average period (distance between the minima).
+\end{itemize}
+
+\paragraph{Thresholding}
+
+\paragraph{Description:}
+Uses a threshold value to detect the minima points.
+
+\paragraph{Approach:}
+\begin{itemize}
+    \item The threshold \( \alpha \) is fixed based on experimentation.
+    \item The signal is checked against the threshold to find the intervals between the minima.
+\end{itemize}
+\paragraph{Advantages and Limitations}
+\begin{itemize}
+    \item[] \textbf{Advantages:}
+    \begin{itemize}
+        \item High speed, 9 times faster than YIN and 50 times faster than SWIPE.
+        \item Hardware efficient, suitable for FPGA due to the simplicity of the XOR operation.
+        \item Low complexity, ideal for applications requiring low latency.
+    \end{itemize}
+
+    \item[] \textbf{Limitations:}
+    \begin{itemize}
+        \item Less accuracy on high-noise signals.
+        \item Dependency on threshold parameters. Parameters need to be fine-tuned for each type of signal.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{OBP Self Modified}
+
+\paragraph{Detection of Minima Based on Derivative of the Autocorrelation Function:}
+In the OBP Self Modified (SM-OBP) approach, the detection of the signal's periodicity is enhanced by utilizing the derivative of the autocorrelation function (ACF). Instead of simply identifying the minima of the autocorrelation function directly, we analyze its derivative to more effectively capture the points of interest, specifically the minima.
+
+\paragraph{Formula:}
+\begin{equation}
+\text{diff\_autocorr}[l] = \text{autocorr}[l+1] - \text{autocorr}[l]
+\label{eq:diff_autocorr}
+\end{equation}
+
+This equation calculates the difference between consecutive values of the autocorrelation function, providing insight into the local variations of the signal's periodicity.
+
+\paragraph{Minima Detection:}
+The minima of the autocorrelation function are then identified by finding the points where the derivative changes sign, as indicated by the following condition:
+
+\begin{equation}
+\text{min\_id} = \left\{ l \mid \text{diff\_autocorr}[l-1] < 0 \text{ and }
+ \text{diff\_autocorr}[l] > 0 \right\}
+\label{eq:minima_detection}
+\end{equation}
+
+This condition ensures that we detect local minima where the derivative transitions from negative to positive, indicating a trough in the autocorrelation function that corresponds to the signal's fundamental frequency period.
+
+\paragraph{Explanation:}
+- \( \text{autocorr}[l] \): The autocorrelation function at lag \( l \).\\
+- \( \text{diff\_autocorr}[l] \): The difference between the autocorrelation at lag \( l+1 \) and lag \( l \).\\
+- \( \text{min\_id} \): The indices of the detected minima, which are used to estimate the fundamental frequency.\\
+By focusing on the derivative of the autocorrelation, the SM-OBP method improves the robustness and accuracy of detecting periodicity, especially in noisy environments. This approach is beneficial for applications where higher accuracy is required in detecting the fundamental frequency, such as real-time speech and audio processing.
+
+\subsection{YIN Algorithm for Fundamental Frequency Estimation}
+The YIN algorithm is a robust and efficient method for estimating the fundamental frequency (\( F_0 \)) of audio signals, such as speech and music. This algorithm improves upon traditional autocorrelation techniques to reduce estimation errors and enhance accuracy. Below are the key steps of the YIN algorithm, along with the associated formulas.
+
+\subsubsection{Difference Function}
+Instead of using the traditional autocorrelation, YIN uses a difference function to measure the dissimilarity between the original signal and its delayed version. This function helps identify multiples of the signal's period.
+The difference function is defined as:
+\begin{equation}
+d(\tau) = \sum_{n=1}^{N-\tau} \left( x[n] - x[n+\tau] \right)^2
+\end{equation}
+Where:
+\begin{itemize}
+    \item \( \tau \): Lag parameter (time delay).
+    \item \( N \): Length of the audio signal.
+    \item \( x[n] \): Signal value at sample \( n \).
+\end{itemize}
+
+\subsubsection{Cumulative Mean Normalized Difference Function (CMND)}
+After computing the difference function, the YIN algorithm normalizes it to remove the effect of amplitude variations in the signal. This normalization creates a new function that starts at a value of 1 and decreases below 1 only when the difference function drops below the average value.
+The normalized function is defined as:
+\begin{equation}
+CMND(\tau) = \frac{d(\tau)}{\frac{1}{\tau} \sum_{i=1}^{\tau} d(i)}
+\end{equation}
+
+\subsubsection{Absolute Threshold}
+To avoid selecting false minima caused by noise or other factors, the algorithm uses an absolute threshold. The period is determined as the smallest \( \tau \) where the normalized function drops below the threshold.
+The threshold is typically set at \( 0.1 \), depending on the application.
+
+\subsubsection{Moving Average for Smoothing \( F_0 \)}
+To further enhance the reliability of \( F_0 \), the algorithm applies a moving average filter. This smooths short-term variations in \( F_0 \), reducing the impact of outliers or noise.
+The smoothed \( F_0 \) is computed as:
+\begin{equation}
+F_0^{\text{smooth}}[i] = \frac{1}{w} \sum_{j=i-\lfloor w/2 \rfloor}^{i+\lfloor w/2 \rfloor} F_0[j]
+\end{equation}
+Where:
+\begin{itemize}
+    \item \( w \): Window size of the moving average.
+    \item \( F_0[j] \): Estimated \( F_0 \) value at position \( j \).
+\end{itemize}
+
+\subsubsection{Linear Interpolation}
+Instead of using parabolic interpolation, the YIN algorithm can use linear interpolation for refining the period estimate. Linear interpolation is advantageous as it can handle adjacent NaN values effectively, making it more robust in noisy environments or incomplete data scenarios.
+The interpolation formula is:
+\begin{equation}
+\hat{\tau} = \tau_{\text{min}} + \frac{d(\tau_{\text{min}} + 1) - d(\tau_{\text{min}} - 1)}{2 \cdot \left( d(\tau_{\text{min}} + 1) - d(\tau_{\text{min}} - 1) \right)}
+\end{equation}
+Where:
+\begin{itemize}
+    \item \( \tau_{\text{min}} \): Local minimum of the normalized function.
+    \item Linear interpolation helps estimate \( \hat{\tau} \) even when adjacent data points contain missing or undefined values.
+\end{itemize}
+
+\subsubsection{Interpolation of Missing Values}
+For frames where no valid \( F_0 \) can be estimated (e.g., due to silence or noise), the algorithm interpolates the missing values using linear interpolation. This step ensures a complete \( F_0 \) contour over time.
+The interpolation is performed as:
+\begin{equation}
+F_0^{\text{interpolated}}[i] = F_0^{\text{smooth}}[i_1] + \frac{(i - i_1)(F_0^{\text{smooth}}[i_2] - F_0^{\text{smooth}}[i_1])}{i_2 - i_1}
+\end{equation}
+Where:
+\begin{itemize}
+    \item \( i_1 \), \( i_2 \): Indices of the nearest valid \( F_0 \) values before and after \( i \), respectively.
+\end{itemize}
+
+\subsubsection{Fundamental Frequency Estimation}
+Finally, the estimated fundamental frequency \( F_0 \) is calculated using the refined lag \( \hat{\tau} \):
+\begin{equation}
+F_0 = \frac{f_s}{\hat{\tau}}
+\end{equation}
+Where:
+\begin{itemize}
+    \item \( f_s \): Sampling rate.
+    \item \( \hat{\tau} \): Refined delay (after interpolation).
+\end{itemize}
+
+\subsection{PitchNet: Fully Convolutional Neural Network for Pitch Estimation}
+
+PitchNet is a Fully Convolutional Neural Network (FCN) designed for pitch estimation from audio data. The architecture leverages principles from \textbf{ResNet} and \textbf{WaveNet}, combining residual connections and dilated convolutions to effectively extract features from audio signals. To enhance performance and ensure robustness in pitch estimation, the input audio signals are preprocessed into Mel-frequency cepstral coefficients (MFCCs) prior to model input.
+
+\subsubsection{Preprocessing: Conversion to MFCCs}
+Before feeding the audio data into the PitchNet model, the raw audio signals are transformed into MFCC features. This preprocessing step involves the following stages:
+
+\begin{itemize}
+    \item \textbf{Pre-emphasis Filter}: A high-pass filter is applied to amplify high-frequency components in the signal, improving the clarity of higher frequencies for subsequent processing.
+    \item \textbf{Framing and Windowing}: The signal is segmented into overlapping frames, typically of \(25\ \text{ms}\) duration with a \(10\ \text{ms}\) hop size. A Hamming window is applied to each frame to minimize spectral leakage.
+    \item \textbf{Short-Time Fourier Transform (STFT)}: Each frame is converted into the frequency domain using STFT, producing a spectrogram that captures the signal's time-frequency characteristics.
+    \item \textbf{Mel Filterbank}: The spectrogram is mapped to the perceptually motivated Mel scale using a Mel filterbank, which emphasizes frequency bands most relevant to human hearing.
+    \item \textbf{Logarithm and Discrete Cosine Transform (DCT)}: The log-Mel spectrogram is computed and passed through a DCT to obtain MFCC features, which serve as the input to PitchNet.
+\end{itemize}
+
+These preprocessing steps generate a compact and discriminative representation of the audio signal, essential for accurate pitch detection.
+
+\subsubsection{Input Formats}
+PitchNet accepts input data in specific formats, structured as follows:
+
+\begin{itemize}
+    \item \textbf{X\_train}: \((n, t, 20, 1)\)
+    \begin{itemize}
+        \item \(n\): Number of training samples.
+        \item \(t\): Number of time steps, which varies based on the dataset:
+        \begin{itemize}
+            \item \(t = 126\) for \textbf{NSYNTH}.
+            \item \(t = 376\) for \textbf{SYNTHPITCH}.
+            \item \(t = 273\) for \textbf{AlphabetSpeech}.
+            \item \(t = 89\) for \textbf{Speech\_Dataset}.
+        \end{itemize}
+        \item \(20\): Number of MFCC features per time step.
+        \item \(1\): Mono-channel input (single channel).
+    \end{itemize}
+    \item \textbf{X\_test}: \((n', t, 20, 1)\)
+    \begin{itemize}
+        \item Same format as \textbf{X\_train}, but for the testing set.
+    \end{itemize}
+    \item \textbf{y\_train}: \((n,)\)
+    \begin{itemize}
+        \item Ground truth labels for the training set, representing the target pitch.
+    \end{itemize}
+    \item \textbf{y\_test}: \((n',)\)
+    \begin{itemize}
+        \item Ground truth labels for the testing set.
+    \end{itemize}
+\end{itemize}
+
+\subsubsection{Model Architecture Highlights}
+PitchNet’s architecture incorporates the following key components:
+\begin{itemize}
+    \item \textbf{Normalization Block}: Normalizes input features across time and feature dimensions to stabilize training and improve generalization.
+    \item \textbf{Bottleneck Block}: Reduces dimensionality while preserving essential information using 2D convolutions with grouped filters.
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=0.4\textwidth]{Bottleneck_Block.png}
+        \caption{\centering Architecture of the Bottleneck Block.}
+        \label{fig:bottleneck_block}
+    \end{figure}
+    \item \textbf{Dilation Residual Block}: Expands the receptive field using dilated convolutions, enabling the model to capture long-range dependencies without significantly increasing computational complexity.
+    \begin{figure}[h]
+        \centering
+        \includegraphics[width=0.4\textwidth]{Dilation_Residual_Block.png}
+        \caption{\centering Architecture of the Dilation Residual Block.}
+        \label{fig:dilation_residual_block}
+    \end{figure}
+    \item \textbf{Output Layer}: Includes a fully connected layer and a final dense layer for regression, leveraging \textbf{LeakyReLU} to mitigate issues with vanishing gradients.
+\end{itemize}
+
+\subsubsection{Model Overview}
+The overall architecture of the PitchNet model is depicted below:
+\begin{figure}[h]
+    \centering
+    \includegraphics[height=0.5\textwidth]{Model_Pitchnet.png}
+    \caption{\centering Overview of the PitchNet architecture.}
+    \label{fig:model_pitchnet}
+\end{figure}
+
+\section{Experiment}
+\subsection{Datasets}
+
+To evaluate the performance of algorithms and models, we utilized four datasets, each selected for its unique characteristics and applicability to pitch detection:
+
+\paragraph{NSynth Dataset}
+The NSynth dataset \cite{b9} is a large-scale audio dataset comprising over 300,000 monophonic musical samples, designed to facilitate research in audio processing and music synthesis. Each sample is 4 seconds long, recorded at a \textbf{sampling rate} of \textbf{16 kHz}, and spans a wide pitch range. The dataset is organized into 11 instrument families-such as bass, guitar, piano, and wind instruments-and categorized into three types: acoustic, electronic, and synthetic. This structure provides a comprehensive and diverse foundation for tasks like pitch detection, timbre analysis, and audio classification.
+
+For this study, we curated a subset of 900 samples from the NSynth dataset. This selection was carefully designed to represent the diversity of instrument families and types while ensuring adequate coverage of pitch and timbre variations. These characteristics make the dataset a suitable benchmark for evaluating models and algorithms in music-related machine learning tasks, particularly those focused on pitch detection and classification.
+
+\paragraph{SYNTHPITCH Dataset}
+The SYNTHPITCH dataset \cite{b7} is a synthetic audio dataset purpose-built to evaluate the performance of pitch detection algorithms under diverse and controlled conditions. Key properties of the dataset are:
+\begin{itemize}
+    \item \textbf{Sampling Rate:} All signals are sampled at \( f_s = 96\ \text{kHz} \).
+    \item \textbf{Signal Length:} Each signal is \( 2\ \text{seconds} \), with \( 192,000 \) samples.
+    \item \textbf{Fundamental Frequency (\( f_0 \))}: Ranges from \( 50\ \text{Hz} \) to \( 5000\ \text{Hz} \), increasing in \( 50\ \text{Hz} \) steps.
+\end{itemize}
+
+The dataset comprises a variety of signal categories, simulating different levels of complexity and acoustic scenarios:
+\begin{itemize}
+    \item \textbf{Pure Tones:} Clean sine waves, forming the simplest category (\textit{e.g., pure}).
+    \item \textbf{Harmonic Tones:} Sine waves augmented with integer multiples of the fundamental frequency (\textit{e.g., 2harm, 4harm}).
+    \item \textbf{Harmonics with Noise:} Signals enriched with harmonics and Gaussian noise of varying signal-to-noise ratios (\textit{e.g., 2harm\_wgn15, full1}).
+    \item \textbf{Complex Signals:} Combinations of multiple harmonics, non-harmonic partials, noise, and reverberation (\textit{e.g., full2}).
+    \item \textbf{Square Waves:} Square waveforms, both clean and with added noise (\textit{e.g., square, square_wgn10}).
+\end{itemize}
+
+\paragraph{AlphabetSpeech Dataset}
+The \textit{AlphabetSpeech dataset} is a curated collection of AI-generated audio recordings, where each alphabetic letter is pronounced in isolation by various synthesized voices. The dataset is designed to represent the human vocal frequency range, covering fundamental frequencies (\( f_0 \)) between \( 85 \ \text{Hz} \) and \( 400 \ \text{Hz} \). This range corresponds to typical human speech, making the dataset particularly suited for benchmarking pitch detection algorithms.
+
+\textbf{Dataset Creation:}
+\begin{itemize}
+    \item \textbf{Audio Generation:} Voice samples were synthesized using ElevenLab’s advanced voice synthesis tool, producing distinct pronunciations of each letter.
+    \item \textbf{Pitch Adjustment:} Fundamental frequencies of the recordings were modified using the \textit{pyworld} library to match target \( f_0 \) values within the human vocal range.
+    \item \textbf{Labeling:} The widely recognized \textit{librosa} library was used to annotate the fundamental frequencies, ensuring precise and reliable labeling.
+\end{itemize}
+
+\textbf{Key Features:}
+\begin{itemize}
+    \item \textbf{Diversity:} Each letter is articulated by multiple voices, with each voice producing the letter at varying \( f_0 \) values, offering extensive pitch coverage.
+    \item \textbf{Frequency Range:} \( 85 \ \text{Hz} \) to \( 400 \ \text{Hz} \), encompassing typical male, female, and child vocal ranges.
+    \item \textbf{Sampling Rate:} \( 44.1 \ \text{kHz} \), ensuring high-fidelity recordings.
+    \item \textbf{Signal Length:} Each recording has a duration of \( \leq 1 \ \text{second} \), suitable for focused analysis of isolated letters.
+\end{itemize}
+
+\textbf{Applications:}
+\begin{itemize}
+    \item \textbf{Pitch Detection Research:} Enables comparisons between new algorithms and established libraries like \textit{librosa}.
+    \item \textbf{Speech Processing:} Serves as a benchmark for tasks involving speech synthesis and frequency analysis.
+    \item \textbf{Real-Time Systems:} Ideal for testing the accuracy and latency of pitch estimation models in constrained scenarios.
+\end{itemize}
+
+The \textit{AlphabetSpeech dataset} provides a controlled yet realistic environment for evaluating pitch detection methods, making it an invaluable resource in the speech processing domain.
+
+\paragraph{SPEECH\ DATASET}
+The \textit{SPEECH\_DATASET} consists of a collection of syllables extracted from the \textit{PitchExtractionByLyrics\_CSD} dataset. These syllables are selected based on the target word specified in the "instruction" column, and each syllable is annotated with its corresponding fundamental frequency (\( f_0 \)) value in the "label" column. The \( f_0 \) values are mapped from the MIDI note values in the "label" column using a MIDI table. For example, if the "label" is "F4", the corresponding \( f_0 \) value in Hertz is calculated as \( 349.228 \ \text{Hz} \), based on the standard MIDI-to-frequency conversion formula. This dataset spans a wide range of vocal tonalities, with fundamental frequencies ranging from \( 195 \ \text{Hz} \) to \( 590 \ \text{Hz} \), representing the typical pitch range of singing voices. The syllables are recorded at a high sampling rate of \( 44.1 \ \text{kHz} \), preserving the fine details of pitch and tonal qualities, which is essential for accurate pitch detection tasks. The dataset is ideal for applications such as pitch detection in singing, voice analysis, and studying vocal pitch variations in speech and music.
+
+\textbf{Sampling Rate:} \( 44.1\ \text{kHz} \)  
+\textbf{Signal Length:} \( \leq 1\ \text{second} \)
+
+\subsection{Metrics}
+
+The performance of each algorithm was evaluated using the \textbf{Accuracy} metrics.
+The ratio of signals where the estimated \(f_0\) falls within a tolerance of the ground truth. Tolerances of 1\%, 2\%, 5\%, 8\%, and 10\% were used. Accuracy was calculated as:
+\begin{equation}
+\text{Tolerance} = \frac{\left| f_0^{\text{true}} - f_0^{\text{predicted}} \right|}{f_0^{\text{true}}} \times 100\%
+\label{eq:tolerance}
+\end{equation}
+
+\begin{equation}
+\text{Accuracy} = \frac{\text{Number of Predictions Within Tolerance}}{\text{Total Number of Records}} \times 100\%
+\label{eq:accuracy}
+\end{equation}
+\subsection{Algorithms Pseudocode}
+
+\subsubsection{ACF Algorithm Pseudocode}
+\begin{algorithmic}[1]
+\vspace{5pt} \hline \vspace{5pt}
+\REQUIRE Signal $x[n]$, Sampling rate $f_s$, Minimum fundamental frequency $f_{\text{min}}$
+\vspace{5pt} \hline \vspace{5pt}
+\ENSURE Normalized Autocorrelation Function (ACF), Fundamental frequency $f_0$
+
+\STATE Compute maximum time shift:
+    \[
+    \tau_{\text{max}} = \frac{f_s}{f_{\text{min}}}
+    \]
+\STATE Initialize empty array $ACF$ of size $\tau_{\text{max}} + 1$
+\FOR{$\tau = 0$ to $\tau_{\text{max}}$}
+    \STATE Compute ACF at lag $\tau$: 
+           \[
+           \text{ACF}_{xx}(\tau) = \sum_{n=0}^{N-\tau-1} x(n) \cdot x(n+\tau)
+           \]
+\ENDFOR
+\STATE Normalize ACF:
+           \[
+           \text{ACF}_{xx}'(\tau) = \frac{\text{ACF}_{xx}(\tau)}{\text{ACF}_{xx}(0)}.
+           \]
+\STATE Identify peak $\tau_1$ corresponding to the first maximum in normalized ACF
+\STATE Compute fundamental frequency:
+           \[
+           f_0 = \frac{f_s}{\tau_1}
+           \]
+\STATE \textbf{Return} Normalized ACF array, $f_0$
+\vspace{5pt} \hline \vspace{5pt}
+\end{algorithmic}
+
+\subsubsection{wACF Algorithm Pseudocode}
+\begin{algorithmic}[1]
+\vspace{5pt} \hline \vspace{5pt}
+\REQUIRE Signal $x[n]$, Window function $w[n]$, Sampling rate $f_s$, Minimum fundamental frequency $f_{\text{min}}$
+\vspace{5pt} \hline \vspace{5pt}
+\ENSURE Normalized Windowed Autocorrelation Function (wACF), Fundamental frequency $f_0$
+
+\STATE Compute maximum time shift $\tau_{\text{max}} = \frac{f_s}{f_{\text{min}}}$
+\STATE Initialize empty array $wACF[t][\tau]$ of size $(T, \tau_{\text{max}} + 1)$, where $T$ is the number of frames
+\FOR{each frame $t$}
+    \STATE Apply window function to the signal: 
+           \[
+           x_{\text{w}}(n) = x(n) \cdot w(n)
+           \]
+    \FOR{$\tau = 0$ to $\tau_{\text{max}}$}
+        \STATE Compute windowed ACF at lag $\tau$: 
+               \[
+               \text{wACF}_{xx}(t, \tau) = \sum_{n=0}^{N-\tau-1} x_{\text{w}}(n)\cdot x_{\text{w}}(n+\tau)
+               \]
+    \ENDFOR
+\ENDFOR
+\STATE Normalize wACF:
+           \[
+           \text{wACF}_{xx}'(t, \tau) = \frac{\text{wACF}_{xx}(t, \tau)}{\text{wACF}_{xx}(t, 0)}
+           \]
+\STATE Identify peak $\tau_1$ corresponding to the first maximum in normalized wACF
+\STATE Compute fundamental frequency $f_0 = \frac{f_s}{\tau_1}$
+\STATE \textbf{Return} Normalized wACF array, $f_0$
+\vspace{5pt} \hline \vspace{5pt}
+\end{algorithmic}
+
+\subsubsection{eACF Algorithm Pseudocode}
+
+\begin{algorithmic}[1]
+\vspace{5pt} \hline \vspace{5pt}
+\REQUIRE Windowed ACF $wACF(t, \tau)$, Window function $w[n]$, Sampling rate $f_s$, Parameter $\beta$ for normalization
+\vspace{5pt} \hline \vspace{5pt}
+\ENSURE Enhanced ACF (eACF), Fundamental frequency $f_0$
+
+\FOR{each frame $t$}
+    \FOR{$\tau = 0$ to $\tau_{\text{max}}$}
+        \STATE Compute \text{wACF}'_{\text{xx}}(t, \tau)$ at lag $\tau$
+               \[
+               \text{wACF}'_{\text{xx}}(t, \tau) = \sum_{n=0}^{N-\tau-1} x[n] \cdot x[n+\tau]
+               \]
+        \STATE Compute autocorrelation of window function at lag $\tau$: 
+               \[
+               \text{wACF}'_{\text{ww}}(t, \tau) = \sum_{n=0}^{N-\tau-1} w[n] \cdot w[n+\tau]
+               \]
+        \STATE Apply normalization to get enhanced ACF:
+               \[
+               \text{eACF}_{xx,w}(t, \tau) = \frac{\text{wACF}'_{xx}(t, \tau)}{\text{wACF}'_{ww}(t, \tau)^\beta}
+               \]
+    \ENDFOR
+\ENDFOR
+\STATE Identify peak $\tau_1$ corresponding to the first maximum in normalized eACF
+\STATE Compute fundamental frequency $f_0 = \frac{f_s}{\tau_1}$
+\STATE \textbf{Return} Enhanced ACF array, $f_0$
+\vspace{5pt} \hline \vspace{5pt}
+\end{algorithmic}
+
+\subsubsection{OneBitPitch (OBP) Algorithm Pseudocode}
+\begin{algorithmic}[1]
+\vspace{5pt} \hline \vspace{5pt}
+\REQUIRE Input signal $x(n)$, Sampling rate $f_s$, Minimum frequency $f_{\text{min}}$, Threshold $\alpha$
+\vspace{5pt} \hline \vspace{5pt}
+\ENSURE Fundamental frequency $F_0$
+
+\STATE \textbf{Step 1: One-bit quantization}
+\FOR{each sample $n$ in the signal}
+    \IF{$x(n) \geq 0$}
+        \STATE $x_{\text{sign}}(n) = 1$
+    \ELSE
+        \STATE $x_{\text{sign}}(n) = 0$
+    \ENDIF
+\ENDFOR
+\STATE \textbf{Step 2: Buffer setup}
+\STATE Compute buffer length: 
+$$
+\text{Buffer length} = \frac{f_s}{f_{\text{min}}}
+$$
+
+\STATE \textbf{Step 3: Compute adjusted autocorrelation}
+\FOR{each lag $l$}
+    \STATE Compute autocorrelation:
+    $$ 
+    d_{xx}(l) = \sum_{k=1}^{N} |x(k) - x(k+l)|
+    $$
+\ENDFOR
+\STATE \textbf{Step 4: Identify local minima}
+\STATE Find local minima of $d_{xx}(l)$ corresponding to signal periodicity
+
+\STATE \textbf{Step 5: Compute fundamental frequency}
+\STATE Compute the period $T$ based on the distance between local minima
+\STATE Compute $F_0$:
+$$
+F_0 = \frac{f_s}{T}
+$$
+
+\STATE \textbf{Step 6: Thresholding}
+\STATE Apply threshold $\alpha$ to find minima points where $d_{xx}(l) < \alpha$
+\STATE \textbf{Return} Fundamental frequency $F_0$
+\vspace{5pt} \hline \vspace{5pt}
+\end{algorithmic}
+
+\subsubsection{OBP Self Modified Algorithm Pseudocode}
+\begin{algorithmic}[1]
+\vspace{5pt} \hline \vspace{5pt}
+\REQUIRE Input signal $x(n)$, Sampling rate $f_s$, Minimum frequency $f_{\text{min}}$, Threshold $\alpha$
+\vspace{5pt} \hline \vspace{5pt}
+\ENSURE Fundamental frequency $F_0$
+
+\STATE \textbf{Step 1: One-bit quantization}
+\FOR{each sample $n$ in the signal}
+    \IF{$x(n) \geq 0$}
+        \STATE $x_{\text{sign}}(n) = 1$
+    \ELSE
+        \STATE $x_{\text{sign}}(n) = 0$
+    \ENDIF
+\ENDFOR
+\STATE \textbf{Step 2: Buffer setup}
+\STATE Compute buffer length: 
+$$
+\text{Buffer length} = \frac{f_s}{f_{\text{min}}}
+$$
+
+\STATE \textbf{Step 3: Compute adjusted autocorrelation}
+\FOR{each lag $l$}
+    \STATE Compute autocorrelation:
+    $$ 
+    d_{xx}(l) = \sum_{k=1}^{N} |x(k) - x(k+l)|
+    $$
+\ENDFOR
+\STATE \textbf{Step 4: Compute the derivative of autocorrelation}
+\FOR{each lag $l$}
+    \STATE Compute difference of autocorrelation values:
+    $$ 
+    \text{d\_ac}[l] = d_{xx}(l+1) - d_{xx}(l)
+    $$
+\ENDFOR
+\STATE \textbf{Step 5: Identify local minima based on derivative}
+\STATE Find indices of minima by checking for sign change in $\text{d\_ac}$:
+$$
+\text{mini\_indices} = \{ l | \text{d\_ac}[l-1] < 0 \text{ and } \text{d\_ac}[l] > 0 \}
+$$
+
+\STATE \textbf{Step 6: Compute fundamental frequency}
+\STATE Compute the period $T$ based on the distance between local minima
+\STATE Compute $F_0$:
+$$
+F_0 = \frac{f_s}{T}
+$$
+
+\STATE \textbf{Step 7: Thresholding}
+\STATE Apply threshold $\alpha$ to find minima points where $d_{xx}(l) < \alpha$
+\STATE \textbf{Return} Fundamental frequency $F_0$
+\vspace{5pt} \hline \vspace{5pt}
+\end{algorithmic}
+
+\subsubsection{YIN Algorithm Pseudocode}
+\begin{algorithmic}[1]
+\vspace{5pt} \hline \vspace{5pt}
+\REQUIRE Frame length $L_f$, Hop length $H$, Minimum frequency $f_{\text{min}}$, Maximum frequency $f_{\text{max}}$, Threshold $T$, Signal $S$, Sample rate $sr$
+\vspace{5pt} \hline \vspace{5pt}
+\ENSURE Predicted fundamental frequencies $F_0$
+
+\STATE \textbf{Initialization:} Set parameters $L_f, H, f_{\text{min}}, f_{\text{max}}, T$
+\STATE Divide signal $S$ into overlapping frames of length $L_f$ with hop $H$
+\FOR{each frame $f$ in frames}
+    \STATE Compute difference function $d(\tau) = \sum_{n=1}^{N-\tau} (f[n] - f[n+\tau])^2$
+    \STATE Compute cumulative mean normalized difference (CMND): \\
+           \[ 
+           CMND(\tau) = \frac{d(\tau)}{\frac{1}{\tau} \sum_{i=1}^\tau d(i)}
+           \]
+    \STATE Detect peaks in $-CMND(\tau)$ where $CMND(\tau) < T$
+    \STATE Filter peaks to ensure $f_{\text{min}} \leq \frac{sr}{\tau} \leq f_{\text{max}}$
+    \STATE Append first valid frequency candidate $\frac{sr}{\tau}$ to $F_0$, or \texttt{NaN} if none found
+\ENDFOR
+\STATE Smooth $F_0$: For each value $F_0[i]$, replace it with the average of the values in the window centered at $i$ with size $w$: 
+        \[
+        F_0'[i] = \frac{1}{w} \sum_{j=i-\lfloor w/2 \rfloor}^{i+\lfloor w/2 \rfloor} F_0[j]
+        \]
+\STATE Interpolate missing values: Identify positions of \texttt{NaN} in $F_0'$, and replace each using linear interpolation between the closest non-\texttt{NaN} values:
+       \[
+       F_0'[i] = F_0'[i_1] + \frac{(i - i_1)(F_0'[i_2] - F_0'[i_1])}{i_2 - i_1}
+       \]
+       where $i_1$ and $i_2$ are the indices of the nearest valid values before and after $i$.
+\STATE \textbf{Return} $F_0$
+\vspace{5pt} \hline \vspace{5pt}
+\end{algorithmic}
+
+
+\subsection{Results and Analysis}
+Table~\ref{tab:performance_comparison} provides an overall comparison of all algorithms across the different datasets. This table presents the performance of each algorithm in terms of tolerance at 1\%, 2\%, and 5\%.
+
+For more detailed insights, the subsequent tables give a closer look at the performance of each individual algorithm. Table \ref{tab:acf_performance}, \ref{tab:eacf_performance}, \ref{tab:obp_performance}, \ref{tab:SMOBP_performance}, \ref{tab:yin_performance}, and \ref{tab:pitchnet_performance} show the detaly accuracy with different tolerance rate of ACF, eACF, OBP, SM-OBP, YIN and PitchNet, respectively.
+
+
+These detailed tables allow for a more granular analysis of how each algorithm performs on different datasets with varying characteristics, such as noise levels and harmonic complexity.
+
+
+\begin{table}[h!]
+\centering
+\resizebox{\columnwidth}{!}{
+\begin{tabular}{lcccccc}
+\hline
+\textbf{Dataset} & \textbf{eACF} & \textbf{ACF} & \textbf{YIN} & \textbf{SM\_OBP} & \textbf{OBP} & \textbf{PitchNet} \\ \hline
+AlphabetSpeech & 25.3 & 25.3 & 42.3 & 42.9 & 0.0 & 2.7 \\ 
+NSynth900 & 72.2 & 72.2 & 79.8 & 22.0 & 2.0 & 10.56 \\ 
+Speech\_Dataset & 73.5 & 73.5 & 79.5 & 10.5 & 5.5 & 0.0\\
+2harm & 100.0 & 99.0 & 98.0 & 39.0 & 98.0 & 5.0 \\ 
+2harm\_wgn15 & 99.0 & 99.0 & 98.0 & 38.0 & 93.0 & 5.0 \\ 
+4harm & 93.0 & 92.0 & 98.0 & 25.0 & 94.0 & 0.0 \\ 
+4harm\_4part\_wgn15 & 87.0 & 87.0 & 71.0 & 16.0 & 1.0 & 15.0 \\ 
+4harm\_high & 51.0 & 50.0 & 94.0 & 6.0 & 55.0 & 5.0 \\ 
+4harm\_wgn15 & 92.0 & 92.0 & 97.0 & 22.0 & 86.0 & 15.0 \\ 
+full1 & 81.0 & 81.0 & 88.0 & 6.0 & 5.0 & 10.0 \\ 
+full2 & 82.0 & 81.0 & 96.0 & 8.0 & 8.0 & 5.0 \\ 
+pure & 100.0 & 99.0 & 98.0 & 100.0 & 99.0 & 5.0 \\ 
+pure\_wgn0P3 & 87.0 & 87.0 & 94.0 & 95.0 & 99.0 & 0.0 \\ 
+square\_pure & 100.0 & 99.0 & 97.0 & 97.0 & 99.0 & 5.0 \\ 
+square\_wgn10 & 97.0 & 97.0 & 95.0 & 92.0 & 99.0 & 5.0 \\ \hline
+\end{tabular}}
+\caption{Performance comparison across algorithms and datasets}
+\label{tab:performance_comparison}
+\end{table}
+
+
+% ACF Table
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{1\%} & \textbf{2\%} & \textbf{5\%} & \textbf{8\%} & \textbf{10\%} \\ \hline
+NSynth900 & 40.22 & 61.00 & 72.22 & - & - \\
+2harm & 72.00 & 96.00 & 99.00 & - & - \\ 
+2harm\_wgn15 & 72.00 & 96.00 & 99.00 & - & - \\
+4harm & 68.00 & 89.00 & 92.00 & - & - \\ 
+4harm\_4part\_wgn15 & 64.00 & 84.00 & 87.00 & - & - \\ 
+4harm\_high & 38.00 & 48.00 & 50.00 & - & - \\ 
+4harm\_wgn15 & 66.00 & 89.00 & 92.00 & - & - \\ 
+full1 & 57.00 & 78.00 & 81.00 & - & - \\ 
+full2 & 62.00 & 78.00 & 81.00 & - & - \\ 
+pure & 71.00 & 96.00 & 99.00 & - & - \\ 
+pure\_wgn0P3 & 56.00 & 84.00 & 87.00 & - & - \\ 
+square\_pure & 72.00 & 96.00 & 99.00 & - & - \\ 
+square\_wgn10 & 70.00 & 94.00 & 97.00 & - & - \\ 
+AlphabetSpeech & 6.59 & 12.64 & 21.43 & 25.27 & 25.27 \\ 
+Speech\_Dataset & 32.50 & 54.50 & 70.00 & 73.50 & 78.50 \\ 
+\hline
+
+\end{tabular}
+\caption{Performance of ACF at Various Tolerance Levels}
+\label{tab:acf_performance}
+\end{table}
+
+% eACF Table
+\begin{table}[h!]
+\centering
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{1\%} & \textbf{2\%} & \textbf{5\%} & \textbf{8\%} & \textbf{10\%} \\ \hline
+NSynth900 & 40.22 & 61.00 & 72.22 & - & - \\ 
+2harm & 72.00 & 97.00 & 100.00 & - & - \\ 
+2harm\_wgn15 & 72.00 & 96.00 & 99.00 & - & - \\ 
+4harm & 69.00 & 90.00 & 93.00 & - & - \\ 
+4harm\_4part\_wgn15 & 64.00 & 84.00 & 87.00 & - & - \\ 
+4harm\_high & 39.00 & 49.00 & 51.00 & - & - \\
+4harm\_wgn15 & 66.00 & 89.00 & 92.00 & - & - \\
+full1 & 57.00 & 78.00 & 81.00 & - & - \\
+full2 & 63.00 & 79.00 & 82.00 & - & - \\ 
+pure & 72.00 & 97.00 & 100.00 & - & - \\ 
+pure\_wgn0P3 & 56.00 & 84.00 & 87.00 & - & - \\ 
+square\_pure & 73.00 & 97.00 & 100.00 & - & - \\ 
+square\_wgn10 & 70.00 & 94.00 & 97.00 & - & - \\ 
+AlphabetSpeech & 6.59 & 12.64 & 21.43 & 25.27 & 25.27 \\ 
+Speech\_Dataset & 32.50 & 54.50 & 70.00 & 73.50 & 78.50 \\ 
+\hline
+
+\end{tabular}
+\caption{Performance of eACF at Various Tolerance Levels}
+\label{tab:eacf_performance}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{1\%} & \textbf{2\%} & \textbf{5\%} & \textbf{8\%} & \textbf{10\%} \\ \hline
+2harm.mat & 10.00 & 20.00 & 98.00 & - & - \\ 
+2harm\_wgn15.mat & 4.00 & 18.00 & 93.00 & - & - \\ 
+4harm.mat & 10.00 & 23.00 & 94.00 & - & - \\ 
+4harm\_4part\_wgn15.mat & 0.00 & 0.00 & 1.00 & - & - \\ 
+4harm\_high.mat & 0.00 & 1.00 & 55.00 & - & - \\ 
+4harm\_wgn15.mat & 5.00 & 11.00 & 86.00 & - & - \\ 
+full1.mat & 1.00 & 3.00 & 5.00 & - & - \\ 
+full2.mat & 0.00 & 0.00 & 8.00 & - & - \\ 
+pure.mat & 3.00 & 14.00 & 99.00 & - & - \\ 
+pure\_wgn0P3.mat & 3.00 & 14.00 & 99.00 & - & - \\ 
+square\_pure.mat & 3.00 & 15.00 & 99.00 & - & - \\ 
+square\_wgn10.mat & 3.00 & 14.00 & 99.00 & - & - \\ 
+NSynth900 & 0.11 & 0.56 & 2.00 & - & - \\ 
+AlphabetSpeech & 0.00 & 0.00 & 0.00 & 0.00 & 0.55 \\ 
+Speech\_Dataset & 1.00 & 1.00 & 3.50 & 5.50 & 5.50 \\ \hline
+\end{tabular}
+\caption{Performance of the OBP at Various Tolerance Levels}
+\label{tab:obp_performance}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{1\%} & \textbf{2\%} & \textbf{5\%} & \textbf{8\%} & \textbf{10\%} \\ \hline
+2harm.mat & 32.00 & 37.00 & 39.00 & - & - \\ 
+2harm\_wgn15.mat & 32.00 & 35.00 & 38.00 & - & - \\ 
+4harm.mat & 22.00 & 24.00 & 25.00 & - & - \\ 
+4harm\_4part\_wgn15.mat & 12.00 & 15.00 & 16.00 & - & - \\ 
+4harm\_high.mat & 6.00 & 6.00 & 6.00 & - & - \\ 
+4harm\_wgn15.mat & 19.00 & 21.00 & 22.00 & - & - \\ 
+full1.mat & 3.00 & 5.00 & 6.00 & - & - \\ 
+full2.mat & 7.00 & 7.00 & 8.00 & - & - \\ 
+pure.mat & 85.00 & 95.00 & 100.00 & - & - \\ 
+pure\_wgn0P3.mat & 79.00 & 88.00 & 95.00 & - & - \\ 
+square\_pure.mat & 79.00 & 90.00 & 97.00 & - & - \\ 
+square\_wgn10.mat & 73.00 & 84.00 & 92.00 & - & - \\ 
+NSynth900 & 5.89 & 12.22 & 22.00 & - & - \\ 
+AlphabetSpeech & 3.85 & 7.14 & 30.77 & 42.86 & 47.80 \\ 
+Speech\_Dataset & 1.00 & 3.50 & 6.50 & 10.50 & 12.00 \\ \hline
+\end{tabular}
+\caption{Performance of SM-OBP at Various Tolerance Levels}
+\label{tab:SMOBP_performance}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{1\%} & \textbf{2\%} & \textbf{5\%} & \textbf{8\%} & \textbf{10\%} \\ \hline
+2harm.mat & 73.00 & 96.00 & 98.00 & - & - \\ 
+2harm\_wgn15.mat & 72.00 & 95.00 & 98.00 & - & - \\ 
+4harm.mat & 73.00 & 96.00 & 98.00 & - & - \\ 
+4harm\_4part\_wgn15.mat & 52.00 & 70.00 & 71.00 & - & - \\ 
+4harm\_high.mat & 70.00 & 92.00 & 94.00 & - & - \\ 
+4harm\_wgn15.mat & 72.00 & 95.00 & 97.00 & - & - \\ 
+full1.mat & 72.00 & 88.00 & 88.00 & - & - \\ 
+full2.mat & 72.00 & 95.00 & 96.00 & - & - \\ 
+pure.mat & 73.00 & 96.00 & 98.00 & - & - \\ 
+pure\_wgn0P3.mat & 64.00 & 91.00 & 94.00 & - & - \\ 
+square\_pure.mat & 72.00 & 95.00 & 97.00 & - & - \\ 
+square\_wgn10.mat & 70.00 & 93.00 & 95.00 & - & - \\ 
+NSynth900 & 48.11 & 67.44 & 79.78 & - & - \\ 
+AlphabetSpeech & 9.89 & 20.33 & 35.71 & 45.60 & 50.00 \\ 
+Speech\_Dataset & 34.00 & 58.00 & 77.50 & 79.50 & 84.00 \\ \hline
+\end{tabular}
+\caption{Performance of YIN at Various Tolerance Levels}
+\label{tab:yin_performance}
+\end{table}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{lccccc}
+\hline
+\textbf{Dataset} & \textbf{1\%} & \textbf{2\%} & \textbf{5\%} & \textbf{8\%} & \textbf{10\%} \\ \hline
+2harm.mat & 0.00 & 0.00 & 5.00 & - & - \\ 
+2harm\_wgn15.mat & 0.00 & 0.00 & 5.00 & - & - \\ 
+4harm.mat & 0.00 & 0.00 & 0.00 & - & - \\ 
+4harm\_4part\_wgn15.mat & 0.00 & 5.00 & 15.00 & - & - \\ 
+4harm\_high.mat & 5.00 & 5.00 & 5.00 & - & - \\ 
+4harm\_wgn15.mat & 10.00 & 15.00 & 15.00 & - & - \\ 
+full1.mat & 5.00 & 5.00 & 10.00 & - & - \\ 
+full2.mat & 0.00 & 0.00 & 5.00 & - & - \\ 
+pure.mat & 5.00 & 5.00 & 5.00 & - & - \\ 
+pure\_wgn0P3.mat & 0.00 & 0.00 & 0.00 & - & - \\ 
+square\_pure.mat & 0.00 & 0.00 & 5.00 & - & - \\ 
+square\_wgn10.mat & 0.00 & 5.00 & 5.00 & - & - \\ 
+NSynth900 & 1.11 & 3.89 & 10.56 & - & - \\ 
+AlphabetSpeech & 0.00 & 0.00 & 2.70 & 2.70 & 2.70 \\ 
+Speech\_Dataset & 0.00 & 0.00 & 0.00 & 0.00 & 0.00 \\ \hline
+\end{tabular}
+\caption{Performance of PitchNet at Various Tolerance Levels}
+\label{tab:pitchnet_performance}
+\end{table}
+
+Fig. \ref{fig:acc_comparison} presents a detailed comparison of the performance of six algorithms across different datasets. The figure illustrates how each algorithm performs in terms of accuracy on each dataset, providing insights into their relative strengths and weaknesses in handling diverse data types and characteristics.
+
+\begin{figure*}[h]
+    \centering
+    \includegraphics[width=1\textwidth]{Acc_For_All.png}
+    \caption{\centering Comparison of algorithms on datasets.}
+    \label{fig:acc_comparison}
+\end{figure*}
+
+\begin{table}[h!]
+\centering
+\label{tab:dataset_mapping}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Full Dataset Name}          & \textbf{Abbreviation} \\ \hline
+AlphabetSpeech                      & AS                    \\ \hline
+NSynth900                           & NS                    \\ \hline
+2harm.mat                           & 2H                    \\ \hline
+2harm\_wgn15.mat                    & 2HW15                 \\ \hline
+4harm.mat                           & 4H                    \\ \hline
+4harm\_4part\_wgn15.mat             & 4H4P15                \\ \hline
+4harm\_high.mat                     & 4HH                   \\ \hline
+4harm\_wgn15.mat                    & 4HW15                 \\ \hline
+Speech\_Dataset                     & SD                    \\ \hline
+full1.mat                           & F1                    \\ \hline
+full2.mat                           & F2                    \\ \hline
+pure.mat                            & P                     \\ \hline
+pure\_wgn0P3.mat                    & PW03                  \\ \hline
+square\_pure.mat                    & SP                    \\ \hline
+square\_wgn10.mat                   & SW10                  \\ \hline
+\end{tabular}
+\caption{\centering Dataset Abbreviations for Y-axis Labels for Fig.\ref{fig:acc_comparison}}
+\end{table}
+
+\subsection{DISCUSSION}
+From the performance comparison across datasets and algorithms, it is evident that YIN generally performs better than the other algorithms, especially in datasets with more complex or noisy environments. For example, in the AlphabetSpeech dataset, YIN outperforms all other methods by a significant margin, achieving 42.3 compared to 25.3 for eACF and ACF. Similarly, in more challenging datasets like NSynth900 and 4harm\_high, YIN maintains high accuracy, significantly better than eACF, ACF, SM\_OBP, OBP, and PitchNet.
+
+eACF and ACF show comparable performance, especially in simpler datasets such as 2harm and pure, where their scores reach 100.0, suggesting that these algorithms are effective when noise is minimal or absent. However, they do not maintain the same level of performance in noisier datasets, such as 4harm\_4part\_wgn15, where eACF and ACF both score 87.0, while YIN still achieves 98.0. This suggests that YIN is more robust to noise and data complexity than both eACF and ACF.
+
+OBP performs well on clean sine wave signals and is competitive in simpler datasets like pure and 2harm, where it achieves scores of 99.0 and 98.0, respectively. However, in noisier datasets, its performance drops compared to YIN, eACF, and ACF. In the 4harm\_high dataset, for example, OBP achieves 55.0, showing that while OBP is effective on clean signals, it struggles with noise and complex data conditions.
+
+SM\_OBP shows improvement over OBP, but it still underperforms compared to YIN, eACF, and ACF, especially in more complex datasets. In datasets like 4harm\_wgn15 and NSynth900, SM\_OBP achieves moderate scores but still lags behind the top-performing algorithms, making it less suitable for pitch tracking tasks, especially in noisy environments. PitchNet remains the least effective algorithm across all datasets, with its performance consistently low, especially in noisy conditions like in 4harm\_4part\_wgn15 and NSynth900.
+
+\section{CONCLUSION}
+In summary, YIN emerges as the most effective algorithm for pitch tracking, particularly in noisy and complex environments, outperforming others in most scenarios. On the other hand, eACF and ACF provide reliable performance across almost all datasets and even outperform YIN in harmonic and noisy conditions, however, they show their limitations at high frequencies. SM\_OBP shows slight improvements over OBP but struggles in challenging conditions. PitchNet consistently underperforms, making it less suitable for practical applications. Overall, YIN is the top choice for accurate and robust pitch tracking, followed by ACF and eACF as strong and reliable alternatives, and lastly OBP and PitchNet.
+
+
+\section{ACKNOWLEDGEMENTS}
+
+We would like to express our sincere gratitude to Professor Dr. Chi-Thien Nguyen for his invaluable guidance, support, and insightful feedback throughout the course of this project. His expertise and encouragement have been fundamental in shaping our work. We also wish to thank our families for their love, patience, and continuous support. Finally, we appreciate the collaboration and dedication of everyone involved, without which this work would not have been possible.
+
+\section{REFERENCES}
+
+\renewcommand{\refname}{} % Loại bỏ tiêu đề mặc định của môi trường
+
+\begin{thebibliography}{00}
+
+\bibitem{b1} A. de Cheveigné and H. Kawahara, ``YIN, a fundamental frequency estimator for speech and musica,'' \emph{The Journal of the Acoustical Society of America}, vol. 111, no. 4, pp. 1917--1930, 2002.
+Available: \url{http://audition.ens.fr/adc/pdf/2002_JASA_YIN.pdf}
+
+\bibitem{b2} S. Wang, Q. Lin, and Y. Shao, ``A Novel Normalization Method for Autocorrelation Function for Pitch Detection and for Speech Activity Detection,'' in \emph{Proc. IEEE Int. Conf. Acoustics, Speech, Signal Processing}, pp. 5534--5537, 2018.
+Available: \url{https://www.researchgate.net/publication/327389080_A_Novel_Normalization_Method_for_Autocorrelation_Function_for_Pitch_Detection_and_for_Speech_Activity_Detection}
+
+\bibitem{b3} C. de Obaldía and U. Zölzer, ``Improving Monophonic Pitch Detection Using the ACF And Simple Heuristics,'' in \emph{Proceedings of the 22nd International Conference on Digital Audio Effects (DAFx-19)}, pp. 1--7, Birmingham, UK, 2019.
+Available: \url{https://www.dafx.de/paper-archive/2019/DAFx2019_paper_54.pdf}
+
+\bibitem{b4} M. Jiménez-Hernández, ``A TUTORIAL TO EXTRACT THE PITCH IN SPEECH SIGNALS USING AUTOCORRELATION,'' \emph{Open Journal of Technology and Engineering Disciplines (OJTED)}, vol. 2, no. 1, pp. 01--10, 2016.
+Available: \url{https://www.researchgate.net/publication/306024204_A_tutorial_to_extract_the_pitch_in_speech_signals_using_autocorrelation}
+
+\bibitem{b5} J. COCHOY, ``PitchNet: A Fully Convolutional Neural Network for Pitch Estimation of Human Voice,'' \emph{Preprint}, 2023.
+Available: \url{https://www.researchgate.net/publication/373117016_PitchNet_A_Fully_Convolutional_Neural_Network_for_Pitch_Estimation}
+
+\bibitem{b6} B. Faghih and J. Timoney, ``Real-time monophonic singing pitch detection,'' \emph{Preprint Research Article}, 2022.
+Available: \url{https://www.researchgate.net/publication/361909956_Real-time_monophonic_singing_pitch_detection}
+
+\bibitem{b7} D. Coccoluto, V. Cesarini, and G. Costantini, ``OneBitPitch (OBP): Ultra-High-Speed Pitch Detection Algorithm Based on One-Bit Quantization and Modified Autocorrelation,'' \emph{Applied Sciences}, vol. 13, no. 14, p. 8191, 2023.
+Available: \url{https://www.researchgate.net/publication/372385829_OneBitPitch_OBP_Ultra-High-Speed_Pitch_Detection_Algorithm_Based_on_One-Bit_Quantization_and_Modified_Autocorrelation}
+
+\bibitem{b8} A. Master, ``Speech spectrum modeling from multiple sources,'' Master’s thesis, Cambridge University, Engineering Dept., Cambridge, England, 2000.
+Available: \url{https://ccrma.stanford.edu/~asmaster/MPhilThesis/mybook2.pdf}
+
+\bibitem{b9} J. Engel, C. Resnick, A. Roberts, S. Dieleman, K. Simonyan, M. Norouzi, D. Eck, and N. Kalchbrenner, 
+``Neural Audio Synthesis of Musical Notes with WaveNet Autoencoders,'' 
+in *Proc. International Conference on Learning Representations (ICLR)*, 2017. 
+Available: \url{https://arxiv.org/abs/1704.01279}
+
+\bibitem{b10} J. Hung and Y. Yang, 
+``Data Augmentation for Instrument Classification Robust to Audio Effects,'' 
+in *Proc. IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)*, 2020. 
+Available: \url{https://arxiv.org/abs/1907.08520}
+
+\end{thebibliography}
+
+% \begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{a1.png}}]{First A. Author} (M'76--SM'81--F'87) and all authors may include 
+% biographies. Biographies are often not included in conference-related
+% papers. This author became a Member (M) of IEEE in 1976, a Senior
+% Member (SM) in 1981, and a Fellow (F) in 1987. The first paragraph may
+% contain a place and/or date of birth (list place, then date). Next,
+% the author's educational background is listed. The degrees should be
+% listed with type of degree in what field, which institution, city,
+% state, and country, and year the degree was earned. The author's major
+% field of study should be lower-cased. 
+
+% The second paragraph uses the pronoun of the person (he or she) and not the 
+% author's last name. It lists military and work experience, including summer 
+% and fellowship jobs. Job titles are capitalized. The current job must have a 
+% location; previous positions may be listed 
+% without one. Information concerning previous publications may be included. 
+% Try not to list more than three books or published articles. The format for 
+% listing publishers of a book within the biography is: title of book 
+% (publisher name, year) similar to a reference. Current and previous research 
+% interests end the paragraph. The third paragraph begins with the author's 
+% title and last name (e.g., Dr.\ Smith, Prof.\ Jones, Mr.\ Kajor, Ms.\ Hunter). 
+% List any memberships in professional societies other than the IEEE. Finally, 
+% list any awards and work for IEEE committees and publications. If a 
+% photograph is provided, it should be of good quality, and 
+% professional-looking. Following are two examples of an author's biography.
+% \end{IEEEbiography}
+
+% \begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{a2.png}}]{Second B. Author} was born in Greenwich Village, New York, NY, USA in 
+% 1977. He received the B.S. and M.S. degrees in aerospace engineering from 
+% the University of Virginia, Charlottesville, in 2001 and the Ph.D. degree in 
+% mechanical engineering from Drexel University, Philadelphia, PA, in 2008.
+
+% From 2001 to 2004, he was a Research Assistant with the Princeton Plasma 
+% Physics Laboratory. Since 2009, he has been an Assistant Professor with the 
+% Mechanical Engineering Department, Texas A{\&}M University, College Station. 
+% He is the author of three books, more than 150 articles, and more than 70 
+% inventions. His research interests include high-pressure and high-density 
+% nonthermal plasma discharge processes and applications, microscale plasma 
+% discharges, discharges in liquids, spectroscopic diagnostics, plasma 
+% propulsion, and innovation plasma applications. He is an Associate Editor of the journal \emph{Earth, Moon, Planets} and holds two patents. 
+
+% Dr. Author was a recipient of the International Association of Geomagnetism
+% and Aeronomy Young Scientist Award for Excellence in 2008, and the IEEE
+% Electromagnetic Compatibility Society Best Symposium Paper Award in 2011. 
+% \end{IEEEbiography}
+
+% \begin{IEEEbiography}[{\includegraphics[width=1in,height=1.25in,clip,keepaspectratio]{a3.png}}]{Third C. Author, Jr.} (M'87) received the B.S. degree in mechanical 
+% engineering from National Chung Cheng University, Chiayi, Taiwan, in 2004
+% and the M.S. degree in mechanical engineering from National Tsing Hua
+% University, Hsinchu, Taiwan, in 2006. He is currently pursuing a Ph.D.
+% degree in mechanical engineering at Texas A{\&}M University, College 
+% Station, TX, USA.
+
+% From 2008 to 2009, he was a Research Assistant with the Institute of
+% Physics, Academia Sinica, Tapei, Taiwan. His research interest includes the
+% development of surface processing and biological/medical treatment
+% techniques using nonthermal atmospheric pressure plasmas, the fundamental study
+% of plasma sources, and fabrication of micro- or nanostructured surfaces. 
+
+% Mr. Author's awards and honors include the Frew Fellowship (Australian 
+% Academy of Science), the I. I. Rabi Prize (APS), the European Frequency and
+% Time Forum Award, the Carl Zeiss Research Award, the William F. Meggers Award, and the Adolph Lomb Medal (OSA).
+% \end{IEEEbiography}
+
+\end{document}
