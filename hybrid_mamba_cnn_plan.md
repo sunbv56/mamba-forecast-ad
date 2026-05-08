@@ -10,8 +10,8 @@ Vai trò của Sinh viên AI 2 tập trung vào việc **Dựng source code beta
   - **Normalize**: Chuẩn hóa dữ liệu đầu vào.
   - **Build forecasting pairs**: Tạo cặp dữ liệu đầu vào (chuỗi quá khứ $X$) và mục tiêu (chuỗi tương lai $Y$).
 - **Huấn luyện (Training)**:
-  - **Train model**: Xây dựng quá trình huấn luyện chuẩn.
-  - **Evaluate anomaly score**: Đánh giá điểm số bất thường (anomaly score) dựa trên sai số dự báo.
+  - **Unsupervised Learning**: Huấn luyện mô hình chỉ trên dữ liệu trạng thái bình thường (healthy data) để học đặc trưng ổn định.
+  - **Evaluate anomaly score**: Đánh giá điểm số bất thường (anomaly score) dựa trên sai số dự báo (Forecasting MSE). Sai số này đóng vai trò như một Health Index tự nhiên.
   - **Draw chart**: Tích hợp các hàm vẽ biểu đồ trong quá trình đánh giá.
 
 ### 1.2. Chạy Baseline
@@ -41,7 +41,7 @@ Các công việc trên nhằm cung cấp thực nghiệm và dữ liệu trực
 - **SQ5**: Cấu hình `lookback N` và `forecast horizon K` nào cho Anomaly Score phân tách rõ ràng nhất giữa trạng thái bình thường và bất thường?
 - **SQ6**: Mô hình nào trong số các baseline (và Mamba) chạy nhanh nhất (inference/train time) nhưng vẫn giữ được chỉ số F1/AUC ở mức tốt?
 - **SQ7**: Kiến trúc Mamba có thực sự tiết kiệm bộ nhớ và thời gian hơn Transformer khi huấn luyện trên chuỗi dữ liệu dài không?
-- **SQ8**: Anomaly Score bắt đầu tăng vọt ở giai đoạn nào của TTF%? Sự gia tăng này có trùng khớp với vùng Degrading/Fault thực tế của hệ thống không?
+- **SQ8**: Anomaly Score bắt đầu tăng vọt ở giai đoạn nào của TTF%? Tại sao sai số dự báo MSE lại là một chỉ báo (indicator) nhạy bén cho sự suy thoái ngay cả khi chưa có lỗi rõ rệt?
 
 ## 3. Đầu ra yêu cầu (Deliverables)
 Để hoàn thành giai đoạn này, Sinh viên AI 2 cần bàn giao:

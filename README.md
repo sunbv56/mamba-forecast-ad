@@ -17,6 +17,14 @@ The core idea is to train a model on "healthy" data to learn normal operating pa
 - **Automated Pipeline:** Full pipeline from raw data windowing/normalization to automated experiment execution.
 - **Rich Visualization:** Generates Anomaly Score charts, TTF (Time To Failure) analysis, and Confusion Matrices.
 
+## 🌟 Scientific Value & Novelty
+
+Compared to existing literature on Mamba for bearing analysis, this project stands out by focusing on:
+
+1.  **Unsupervised Learning (Self-Supervised Forecasting):** Unlike most papers that require failure labels for direct RUL regression or fault classification, our model learns healthy patterns from normal operating data. This is significantly more practical for industrial applications where failure data is scarce.
+2.  **Anomaly Score as a Degradation Indicator:** We utilize the forecasting error (MSE) as a dynamic Anomaly Score. This score provides a continuous health index that naturally increases as the bearing deviates from its learned "healthy" state, offering a physically intuitive way to monitor degradation without explicit stage labels.
+3.  **Modern Dataset (B02 Zenodo):** Experiments are conducted on the recent B02 dataset (2024), providing fresh insights beyond the over-used PRONOSTIA and CWRU benchmarks.
+
 ## 📁 Project Structure
 
 ```text

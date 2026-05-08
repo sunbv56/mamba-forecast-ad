@@ -54,6 +54,7 @@ To bridge these gaps, this paper makes the following contributions:
     \item We propose \textbf{CI-Mamba}, a Channel-Independent Hybrid CNN-Mamba model for bearing PHM. CI-Mamba employs a novel \textbf{multi-scale dual-kernel} convolutional patch embedding that captures both coarse structural patterns and fine-grained vibration transients, followed by a shared Mamba encoder that models long-range temporal dependencies across all channels independently.
     \item We introduce a \textbf{parameter-budget-controlled} benchmarking methodology, constraining all compared architectures (LSTM, TCN, ModernTCN, Transformer, CI-Mamba) to 200k--250k parameters. This design choice isolates the contribution of architectural efficiency from mere model scale—a methodology not found in existing bearing Mamba literature.
     \item We conduct a \textbf{comprehensive multi-metric evaluation} on the PRONOSTIA (FEMTO-ST) dataset, reporting AUROC, AUPRC, and inference latency (ms/sample). The inclusion of AUPRC alongside AUROC is especially important for the severely imbalanced anomaly detection task inherent in run-to-failure bearing data.
+    \item We emphasize the \textbf{unsupervised/self-supervised nature} of the forecasting-based detection paradigm. Unlike supervised RUL regression models that require expensive failure labels, our approach learns healthy signal patterns from normal operating data, making it significantly more robust and applicable to real-world industrial environments where failure events are rare.
 \end{enumerate}
 
 The remainder of this paper is organized as follows. Section~\ref{sec:lit_review} reviews foundational work in bearing PHM and Health Index modeling. Section~\ref{sec:related_work} surveys related deep learning and Mamba-based approaches. Section~\ref{sec:methodology} describes the proposed CI-Mamba architecture and the experimental setup. Conclusions and future directions are discussed in Section~\ref{sec:conclusion}.
@@ -80,7 +81,7 @@ An anomaly is declared when the model-predicted HI falls below a calibrated thre
     \label{eq:anomaly_rule}
 \end{equation}
 
-\noindent This forecasting-as-detection paradigm allows a single architecture to serve both HI estimation and online anomaly detection purposes without a separate detection head.
+\noindent This forecasting-as-detection paradigm allows a single architecture to serve both HI estimation and online anomaly detection purposes without a separate detection head. Crucially, the forecasting Mean Squared Error (MSE) acts as a dynamic indicator of system health: as the bearing degrades, its vibration signature deviates from the "healthy" patterns learned during training, causing the forecasting error to rise significantly. This MSE-based anomaly score provides a sensitive and physically grounded measure of degradation that correlates strongly with the physical deterioration of the component, often preceding total failure by a significant margin.
 
 %=============================================================
 \section{Related Work}

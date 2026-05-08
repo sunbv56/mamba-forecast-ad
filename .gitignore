@@ -181,3 +181,5 @@ wandb/
 *.ckpt
 *.pth
 *.h5
+rtk
+.agents/rules/antigravity-rtk-rules.md
