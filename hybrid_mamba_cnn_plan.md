@@ -42,6 +42,7 @@ Các công việc trên nhằm cung cấp thực nghiệm và dữ liệu trực
 - **SQ6**: Mô hình nào trong số các baseline (và Mamba) chạy nhanh nhất (inference/train time) nhưng vẫn giữ được chỉ số F1/AUC ở mức tốt?
 - **SQ7**: Kiến trúc Mamba có thực sự tiết kiệm bộ nhớ và thời gian hơn Transformer khi huấn luyện trên chuỗi dữ liệu dài không?
 - **SQ8**: Anomaly Score bắt đầu tăng vọt ở giai đoạn nào của TTF%? Tại sao sai số dự báo MSE lại là một chỉ báo (indicator) nhạy bén cho sự suy thoái ngay cả khi chưa có lỗi rõ rệt?
+- **SQ9**: Làm thế nào để thiết lập ngưỡng (threshold) chống chịu được nhiễu trong tập huấn luyện? So sánh hiệu quả giữa 3-sigma và Robust Thresholding (Median/IQR) trong việc giảm tỷ lệ báo động giả (FAR).
 
 ## 3. Đầu ra yêu cầu (Deliverables)
 Để hoàn thành giai đoạn này, Sinh viên AI 2 cần bàn giao:

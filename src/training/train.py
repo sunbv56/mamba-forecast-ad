@@ -29,7 +29,7 @@ from src.evaluation.anomaly_scorer import calculate_anomaly_score
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
-from src.evaluation.metrics import calculate_threshold_3sigma, calculate_metrics
+from src.evaluation.metrics import calculate_threshold_3sigma, calculate_threshold_robust, calculate_threshold_percentile, calculate_threshold_gmm, find_best_threshold, calculate_metrics
 
 # --- Training and Evaluation Functions ---
 
@@ -93,68 +93,89 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
             scores = calculate_anomaly_score(y, y_pred, metric='mse')
             train_scores_sample.extend(scores.tolist())
             
-    threshold = calculate_threshold_3sigma(np.array(train_scores_sample))
-    print(f"Threshold (3-sigma): {threshold:.6f}")
+    threshold_3s = calculate_threshold_3sigma(np.array(train_scores_sample))
+    threshold_rb = calculate_threshold_robust(np.array(train_scores_sample))
+    threshold_pc = calculate_threshold_percentile(np.array(train_scores_sample), q=99.7)
 
-    # --- Evaluation on Test Set ---
+    # --- 1. Evaluation on Test Set (To calculate all thresholds) ---
     print(f"Evaluating {name} on Test Set...")
     test_scores = []
-    latencies = []
-    
+    test_latencies = []
+    model.eval()
     with torch.no_grad():
         for batch in test_loader:
             x, y = batch[0].to(device), batch[1].to(device)
-            
             start_inf = time.time()
             y_pred = model(x)
-            latencies.append((time.time() - start_inf) / x.size(0))
-            
+            test_latencies.append((time.time() - start_inf) / x.size(0))
             scores = calculate_anomaly_score(y, y_pred, metric='mse')
             test_scores.extend(scores.tolist())
     
     test_scores = np.array(test_scores)
+    test_latency_avg = np.mean(test_latencies) * 1000
     
-    # Combined metrics logic from notebook
     combined_scores = np.concatenate([train_scores_sample, test_scores])
     combined_labels = np.concatenate([
         np.zeros(len(train_scores_sample)), 
         np.ones(len(test_scores))
     ]).astype(int)
     
-    pred_labels = (combined_scores > threshold).astype(int)
+    # Self-learning and Optimal thresholds
+    threshold_gmm = calculate_threshold_gmm(combined_scores)
+    threshold_opt, _ = find_best_threshold(combined_scores, combined_labels)
+
+    # --- 2. Evaluation on 4000 Random Train Samples (Healthy Check) ---
+    print(f"\n>>> EVALUATION ON TRAIN (4000 random healthy samples)...")
+    random_train_scores = []
+    train_inf_latencies = []
+    with torch.no_grad():
+        indices = np.random.choice(len(train_loader.dataset), min(4000, len(train_loader.dataset)), replace=False)
+        temp_subset = Subset(train_loader.dataset, indices)
+        temp_loader = DataLoader(temp_subset, batch_size=config['training'].get('batch_size', 128), shuffle=False)
+        
+        for batch in temp_loader:
+            x, y = batch[0].to(device), batch[1].to(device)
+            start_inf = time.time()
+            y_pred = model(x)
+            train_inf_latencies.append((time.time() - start_inf) / x.size(0))
+            scores = calculate_anomaly_score(y, y_pred, metric='mse')
+            random_train_scores.extend(scores.tolist())
     
-    try:
-        metrics = calculate_metrics(combined_scores, combined_labels, threshold)
-        precision_path, recall_path, _ = precision_recall_curve(combined_labels, combined_scores)
-        auprc = auc_score_func(recall_path, precision_path)
-    except Exception as e:
-        print(f"Error calculating metrics: {e}")
-        metrics = {'AUC': 0.0}
-        auprc = 0.0
-
-    calc_precision = precision_score(combined_labels, pred_labels, zero_division=0)
-    calc_recall = recall_score(combined_labels, pred_labels, zero_division=0)
-    calc_f1 = f1_score(combined_labels, pred_labels, zero_division=0)
+    rt_scores = np.array(random_train_scores)
+    rt_labels = np.zeros(len(rt_scores)).astype(int)
+    train_latency_avg = np.mean(train_inf_latencies) * 1000
     
-    detection_rate = np.sum(test_scores > threshold) / len(test_scores)
-    avg_latency = np.mean(latencies) * 1000
+    for t_name, t_val in [("3-Sigma", threshold_3s), ("Robust", threshold_rb), ("Percentile", threshold_pc), ("Self-Learn", threshold_gmm), ("Optimal", threshold_opt)]:
+        m = calculate_metrics(rt_scores, rt_labels, t_val)
+        det_rate = np.sum(rt_scores > t_val) / len(rt_scores)
+        print(f"   [{t_name:<10}] > F1: {m.get('F1', 0):.4f} | FAR: {m.get('FAR', 0):.4f} | Det Rate: {det_rate:.2%} | Thresh: {t_val:.6f}")
+    print(f"   > Avg Latency: {train_latency_avg:.4f} ms/sample")
 
-    print(f"✅ {name} Finished!")
-    print(f"   > F1: {calc_f1:.4f} | AUC: {metrics.get('AUC', 0):.4f} | AUPRC: {auprc:.4f}")
-    print(f"   > Precision: {calc_precision:.4f} | Recall: {calc_recall:.4f}")
-    print(f"   > Latency: {avg_latency:.4f} ms/sample | Detection Rate: {detection_rate:.2%}")
+    # --- 3. Evaluation on Test Set (Anomaly Performance) ---
+    print(f"\n>>> EVALUATION ON TEST (Anomaly Detection Performance)...")
+    precision_path, recall_path, _ = precision_recall_curve(combined_labels, combined_scores)
+    auprc = auc_score_func(recall_path, precision_path)
+    
+    for t_name, t_val in [("3-Sigma", threshold_3s), ("Robust", threshold_rb), ("Percentile", threshold_pc), ("Self-Learn", threshold_gmm), ("Optimal", threshold_opt)]:
+        m = calculate_metrics(combined_scores, combined_labels, t_val)
+        det_rate = np.sum(test_scores > t_val) / len(test_scores)
+        print(f"   [{t_name:<10}] > F1: {m.get('F1', 0):.4f} | FAR: {m.get('FAR', 0):.4f} | Det Rate: {det_rate:.2%} | Thresh: {t_val:.6f}")
+    print(f"   > AUPRC: {auprc:.4f} | Avg Latency: {test_latency_avg:.4f} ms/sample")
 
-    # Save results
+    print(f"\n✅ {name} Finished!")
+
+    # Save results (using Robust for summary)
+    m_rb_final = calculate_metrics(combined_scores, combined_labels, threshold_rb)
+    m_3s_final = calculate_metrics(combined_scores, combined_labels, threshold_3s)
+    
     result = {
         'name': name,
-        'f1': float(calc_f1),
-        'auc': float(metrics.get('AUC', 0)),
-        'precision': float(calc_precision),
-        'recall': float(calc_recall),
+        'f1_3s': float(m_3s_final.get('F1', 0)),
+        'f1_rb': float(m_rb_final.get('F1', 0)),
+        'auc': float(m_rb_final.get('AUC', 0)),
+        'far_rb': float(m_rb_final.get('FAR', 0)),
         'auprc': float(auprc),
-        'latency': float(avg_latency),
-        'detection_rate': float(detection_rate),
-        'threshold': float(threshold),
+        'latency': float(test_latency_avg),
         'train_duration': float(train_duration)
     }
 
@@ -233,22 +254,22 @@ def main():
             'model': {
                 'mamba_version': 1,
                 'cnn_out_channels': 64, 'mamba_d_model': 64, 'mamba_n_layer': 4,
-                'mamba_d_state': 64, 'mamba_d_conv': 4, 'mamba_expand': 2,
+                'mamba_d_state': 16, 'mamba_d_conv': 4, 'mamba_expand': 3,
                 'forecast_len': horizon, 'patch_size': 64, 'stride': 64,
                 'in_channels': 2, 'out_channels': 2
             },
             'data': {'patch_size': 64, 'stride': 64}
         }),
-        "Mamba2-Hybrid": HybridMambaCNN({
-            'model': {
-                'mamba_version': 2,
-                'cnn_out_channels': 64, 'mamba_d_model': 64, 'mamba_n_layer': 4,
-                'mamba_d_state': 64, 'mamba_d_conv': 4, 'mamba_expand': 2,
-                'forecast_len': horizon, 'patch_size': 64, 'stride': 64,
-                'in_channels': 2, 'out_channels': 2
-            },
-            'data': {'patch_size': 64, 'stride': 64}
-        }),
+        # "Mamba2-Hybrid": HybridMambaCNN({
+        #     'model': {
+        #         'mamba_version': 2,
+        #         'cnn_out_channels': 64, 'mamba_d_model': 64, 'mamba_n_layer': 4,
+        #         'mamba_d_state': 64, 'mamba_d_conv': 4, 'mamba_expand': 2,
+        #         'forecast_len': horizon, 'patch_size': 64, 'stride': 64,
+        #         'in_channels': 2, 'out_channels': 2
+        #     },
+        #     'data': {'patch_size': 64, 'stride': 64}
+        # }),
         # "Mamba3-Hybrid": HybridMambaCNN({
         #     'model': {
         #         'mamba_version': 3,
@@ -280,11 +301,11 @@ def main():
         
     # Final Results Summary
     print("\n" + "="*50)
-    print(f"{'Model':<20} | {'F1':<8} | {'AUC':<8} | {'Latency (ms)':<12}")
-    print("-" * 50)
+    print(f"{'Model':<20} | {'F1 (3s)':<8} | {'F1 (rb)':<8} | {'AUC':<8} | {'FAR (rb)':<8}")
+    print("-" * 65)
     for name, res in results.items():
-        print(f"{name:<20} | {res['f1']:<8.4f} | {res['auc']:<8.4f} | {res['latency']:<12.4f}")
-    print("="*50)
+        print(f"{name:<20} | {res['f1_3s']:<8.4f} | {res['f1_rb']:<8.4f} | {res['auc']:<8.4f} | {res['far_rb']:<8.4f}")
+    print("="*65)
 
 if __name__ == "__main__":
     main()
