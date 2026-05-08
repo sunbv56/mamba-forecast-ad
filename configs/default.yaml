@@ -16,6 +16,8 @@ model:
   mamba_d_conv: 4
   mamba_expand: 2
   forecast_len: 64
+  bidirectional: false
+  decomp_kernel: 25
 
 training:
   batch_size: 32

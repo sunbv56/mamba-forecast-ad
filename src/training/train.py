@@ -26,6 +26,9 @@ from src.models.baselines.transformer_small import iTransformer, PositionalEncod
 from src.models.baselines.patch_models import PatchTST, PatchLSTM
 from src.models.mamba import HybridMambaCNN
 from src.evaluation.anomaly_scorer import calculate_anomaly_score
+
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 from src.evaluation.metrics import calculate_threshold_3sigma, calculate_metrics
 
 # --- Training and Evaluation Functions ---
@@ -220,21 +223,44 @@ def main():
 
     # --- Model Initialization ---
     all_models = {
-        "LSTM": LSTMForecaster(input_dim=2, hidden_dim=80, num_layers=3, horizon=horizon),
-        "PatchLSTM": PatchLSTM(in_channels=2, patch_size=64, stride=64, d_model=80, num_layers=3, horizon=horizon),
+        # "LSTM": LSTMForecaster(input_dim=2, hidden_dim=80, num_layers=3, horizon=horizon),
+        # "PatchLSTM": PatchLSTM(in_channels=2, patch_size=64, stride=64, d_model=80, num_layers=3, horizon=horizon),
         # "TCN": TCNForecaster(input_dim=2, num_channels=[64]*4, kernel_size=3, horizon=horizon),
-        "ModernTCN": ModernTCNForecaster(input_dim=2, d_model=96, num_layers=3, kernel_size=17, horizon=horizon),
-        "iTransformer": iTransformer(input_dim=2, lookback=lookback, d_model=64, nhead=4, num_layers=3, horizon=horizon),
-        "PatchTST": PatchTST(in_channels=2, lookback=lookback, patch_size=64, stride=64, d_model=64, nhead=4, num_layers=3, horizon=horizon),
-        "Mamba-Hybrid": HybridMambaCNN({
+        # "ModernTCN": ModernTCNForecaster(input_dim=2, d_model=96, num_layers=3, kernel_size=17, horizon=horizon),
+        # "iTransformer": iTransformer(input_dim=2, lookback=lookback, d_model=64, nhead=4, num_layers=3, horizon=horizon),
+        # "PatchTST": PatchTST(in_channels=2, lookback=lookback, patch_size=64, stride=64, d_model=64, nhead=4, num_layers=3, horizon=horizon),
+        "Mamba1-Hybrid": HybridMambaCNN({
             'model': {
+                'mamba_version': 1,
                 'cnn_out_channels': 64, 'mamba_d_model': 64, 'mamba_n_layer': 4,
-                'mamba_d_state': 16, 'mamba_d_conv': 4, 'mamba_expand': 2,
+                'mamba_d_state': 64, 'mamba_d_conv': 4, 'mamba_expand': 2,
                 'forecast_len': horizon, 'patch_size': 64, 'stride': 64,
                 'in_channels': 2, 'out_channels': 2
             },
             'data': {'patch_size': 64, 'stride': 64}
-        })
+        }),
+        "Mamba2-Hybrid": HybridMambaCNN({
+            'model': {
+                'mamba_version': 2,
+                'cnn_out_channels': 64, 'mamba_d_model': 64, 'mamba_n_layer': 4,
+                'mamba_d_state': 64, 'mamba_d_conv': 4, 'mamba_expand': 2,
+                'forecast_len': horizon, 'patch_size': 64, 'stride': 64,
+                'in_channels': 2, 'out_channels': 2
+            },
+            'data': {'patch_size': 64, 'stride': 64}
+        }),
+        # "Mamba3-Hybrid": HybridMambaCNN({
+        #     'model': {
+        #         'mamba_version': 3,
+        #         'cnn_out_channels': 64, 'mamba_d_model': 64, 'mamba_n_layer': 4,
+        #         'mamba_d_state': 64, 'forecast_len': horizon, 'patch_size': 64, 'stride': 64,
+        #         'in_channels': 2, 'out_channels': 2,
+        #         'mamba_kwargs': {
+        #             'headdim': 64, 'is_mimo': True, 'mimo_rank': 4, 'chunk_size': 16
+        #         }
+        #     },
+        #     'data': {'patch_size': 64, 'stride': 64}
+        # })
     }
     
     if args.model == "all":
@@ -247,6 +273,8 @@ def main():
         
     results = {}
     for name, model in models_to_train.items():
+        params = count_parameters(model)
+        print(f"\n>>> Training {name} (Params: {params:,})...")
         res = train_one_model(name, model, train_loader, val_loader, test_loader, config, device)
         results[name] = res
         
