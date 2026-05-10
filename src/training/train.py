@@ -31,6 +31,39 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 from src.evaluation.metrics import calculate_threshold_3sigma, calculate_threshold_robust, calculate_threshold_percentile, calculate_threshold_gmm, find_best_threshold, calculate_metrics, calculate_threshold_pot
 
+class EarlyStopping:
+    def __init__(self, patience=10, verbose=False, delta=0, path='checkpoint.pt'):
+        self.patience = patience
+        self.verbose = verbose
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.val_loss_min = np.inf
+        self.delta = delta
+        self.path = path
+
+    def __call__(self, val_loss, model):
+        score = -val_loss
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            if self.verbose:
+                print(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+            self.counter = 0
+
+    def save_checkpoint(self, val_loss, model):
+        if self.verbose:
+            print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+        torch.save(model.state_dict(), self.path)
+        self.val_loss_min = val_loss
+
 # --- Training and Evaluation Functions ---
 
 def train_one_model(name, model, train_loader, val_loader, test_loader, config, device):
@@ -42,6 +75,12 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.MSELoss()
     scaler = torch.amp.GradScaler('cuda') if device.type == 'cuda' else None
+    
+    # Early Stopping setup
+    save_dir = config['training'].get('save_dir', 'results/models')
+    os.makedirs(save_dir, exist_ok=True)
+    best_model_path = os.path.join(save_dir, f"{name.lower().replace('-', '_')}_best.pth")
+    early_stopping = EarlyStopping(patience=10, verbose=True, path=best_model_path)
     
     losses = []
     start_train = time.time()
@@ -82,8 +121,36 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         if epoch % 10 == 0 or epoch == 1:
             print(f"Epoch [{epoch}/{epochs}] - Loss: {avg_loss:.6f}")
             
+        # Validation
+        model.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for batch in val_loader:
+                x, y = batch[0].to(device), batch[1].to(device)
+                stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
+                
+                with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
+                    if stats is not None and isinstance(model, HybridMambaCNN):
+                        y_pred = model(x, stats)
+                    else:
+                        y_pred = model(x)
+                    loss = criterion(y_pred, y)
+                val_loss += loss.item()
+        
+        avg_val_loss = val_loss / len(val_loader)
+        print(f"Epoch [{epoch}/{epochs}] - Val Loss: {avg_val_loss:.6f}")
+        
+        early_stopping(avg_val_loss, model)
+        if early_stopping.early_stop:
+            print("Early stopping triggered!")
+            break
+            
     train_duration = time.time() - start_train
     print(f"Training took {train_duration:.2f} seconds")
+
+    # Load the best model weights
+    print(f"Loading best model from {best_model_path}...")
+    model.load_state_dict(torch.load(best_model_path, weights_only=True))
 
     # --- Threshold Calculation (from Train Set) ---
     print(f"Calculating threshold for {name}...")
@@ -201,12 +268,10 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         'train_duration': float(train_duration)
     }
 
-    # Save model
-    save_dir = config['training'].get('save_dir', 'results/models')
-    os.makedirs(save_dir, exist_ok=True)
-    model_path = os.path.join(save_dir, f"{name.lower().replace('-', '_')}_best.pth")
-    torch.save(model.state_dict(), model_path)
-    print(f"Model saved to {model_path}")
+    # Best model is already saved by EarlyStopping, so we don't need to save it again here
+    # unless we want to ensure the final result dict uses the correct path.
+    model_path = best_model_path
+    print(f"Best model available at {model_path}")
 
     # Cleanup memory
     del model
