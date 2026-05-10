@@ -22,7 +22,7 @@ model:
 training:
   batch_size: 32
   learning_rate: 1e-4
-  epochs: 50
+  epochs: 1
   device: "cuda"
 
 logging:

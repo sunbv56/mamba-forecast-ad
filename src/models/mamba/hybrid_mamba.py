@@ -48,7 +48,7 @@ class HybridMambaCNN(nn.Module):
             out_channels=1 # In CI mode, each channel is processed to output its own forecast
         )
 
-    def forward(self, x):
+    def forward(self, x, stats=None):
         # x: (Batch, Channels, Length)
         B, C, L = x.shape
         
@@ -61,24 +61,13 @@ class HybridMambaCNN(nn.Module):
         x = x.reshape(B * C, N, D)
         x = self.mamba(x) # (B*C, N, D)
         
+        # Xử lý stats cho CI mode
+        if stats is not None:
+            # stats: (B, C, 8) -> (B*C, 8)
+            stats = stats.reshape(B * C, -1)
+        
         # Bước 3: Head
-        # Đưa về lại (Batch, Num_Patches, Channels, d_model) hoặc Pooling
-        # FusionForecastHead mong đợi (Batch, Num_Patches, d_model) và tự xử lý channels
-        # Ta sẽ Pooling theo từng channel trước
-        
-        x = x.reshape(B, C, N, D)
-        # Head hiện tại mong đợi (Batch, Num_Patches, d_model) 
-        # Nếu ta muốn giữ CI hoàn toàn, ta nên gọi head cho từng channel
-        # Hoặc cập nhật head để xử lý 4D tensor.
-        
-        # Cách đơn giản nhất: permute về (B, N, C*D) và dùng head lớn hơn? 
-        # Không, hãy gọi head cho từng channel.
-        
-        # x: (B, C, N, D) -> (B*C, N, D)
-        x = x.reshape(B * C, N, D)
-        forecast = self.head(x) # (B*C, out_channels_per_head, forecast_len)
-        # Note: head.out_channels is usually same as global out_channels? 
-        # In CI, each head usually outputs 1 channel.
+        forecast = self.head(x, stats=stats) # (B*C, out_channels_per_head, forecast_len)
         
         # Reshape forecast back
         # forecast: (B*C, 1, forecast_len) -> (B, C, forecast_len)

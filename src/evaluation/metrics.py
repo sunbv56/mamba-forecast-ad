@@ -1,5 +1,25 @@
 import numpy as np
 from sklearn.metrics import f1_score, roc_auc_score, confusion_matrix
+from scipy.stats import genpareto
+
+def calculate_threshold_pot(scores, q=1e-3, init_level=0.98):
+    """
+    Tính ngưỡng Peak Over Threshold (POT) dựa trên Extreme Value Theory.
+    """
+    scores = np.array(scores)
+    t = np.quantile(scores, init_level)
+    peaks = scores[scores > t] - t
+    if len(peaks) == 0:
+        return t
+    try:
+        c, loc, scale = genpareto.fit(peaks, floc=0)
+        prob = q * len(scores) / len(peaks)
+        if prob >= 1:
+            return t
+        z_q = t + genpareto.isf(prob, c, loc=0, scale=scale)
+        return z_q
+    except Exception:
+        return t
 
 def calculate_threshold_3sigma(healthy_scores):
     """

@@ -166,9 +166,9 @@ cython_debug/
 
 # Project Specific - Large Files and Directories
 B02.zip
-data/
-results/
-scratch/
+/data/
+/results/
+/scratch/
 *.zip
 *.tar.gz
 *.7z

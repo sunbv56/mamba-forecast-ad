@@ -29,7 +29,7 @@ from src.evaluation.anomaly_scorer import calculate_anomaly_score
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
-from src.evaluation.metrics import calculate_threshold_3sigma, calculate_threshold_robust, calculate_threshold_percentile, calculate_threshold_gmm, find_best_threshold, calculate_metrics
+from src.evaluation.metrics import calculate_threshold_3sigma, calculate_threshold_robust, calculate_threshold_percentile, calculate_threshold_gmm, find_best_threshold, calculate_metrics, calculate_threshold_pot
 
 # --- Training and Evaluation Functions ---
 
@@ -38,7 +38,7 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
     model.to(device)
     
     lr = float(config['training'].get('learning_rate', 0.001))
-    epochs = int(config['training'].get('epochs', 100))
+    epochs = int(config['training'].get('epochs', 1))
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.MSELoss()
     scaler = torch.amp.GradScaler('cuda') if device.type == 'cuda' else None
@@ -52,10 +52,14 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         pbar = tqdm(train_loader, desc=f"Epoch {epoch}/{epochs}")
         for batch in pbar:
             x, y = batch[0].to(device), batch[1].to(device)
+            stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
             
             optimizer.zero_grad()
             with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
-                y_pred = model(x)
+                if stats is not None and isinstance(model, HybridMambaCNN):
+                    y_pred = model(x, stats)
+                else:
+                    y_pred = model(x)
                 loss = criterion(y_pred, y)
             
             if scaler:
@@ -89,13 +93,19 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         for i, batch in enumerate(train_loader):
             if i > 20: break 
             x, y = batch[0].to(device), batch[1].to(device)
-            y_pred = model(x)
+            stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
+            
+            if stats is not None and isinstance(model, HybridMambaCNN):
+                y_pred = model(x, stats)
+            else:
+                y_pred = model(x)
             scores = calculate_anomaly_score(y, y_pred, metric='mse')
             train_scores_sample.extend(scores.tolist())
             
     threshold_3s = calculate_threshold_3sigma(np.array(train_scores_sample))
     threshold_rb = calculate_threshold_robust(np.array(train_scores_sample))
     threshold_pc = calculate_threshold_percentile(np.array(train_scores_sample), q=99.7)
+    threshold_pot = calculate_threshold_pot(np.array(train_scores_sample), q=1e-3)
 
     # --- 1. Evaluation on Test Set (To calculate all thresholds) ---
     print(f"Evaluating {name} on Test Set...")
@@ -105,8 +115,13 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
     with torch.no_grad():
         for batch in test_loader:
             x, y = batch[0].to(device), batch[1].to(device)
+            stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
+            
             start_inf = time.time()
-            y_pred = model(x)
+            if stats is not None and isinstance(model, HybridMambaCNN):
+                y_pred = model(x, stats)
+            else:
+                y_pred = model(x)
             test_latencies.append((time.time() - start_inf) / x.size(0))
             scores = calculate_anomaly_score(y, y_pred, metric='mse')
             test_scores.extend(scores.tolist())
@@ -135,8 +150,13 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         
         for batch in temp_loader:
             x, y = batch[0].to(device), batch[1].to(device)
+            stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
+            
             start_inf = time.time()
-            y_pred = model(x)
+            if stats is not None and isinstance(model, HybridMambaCNN):
+                y_pred = model(x, stats)
+            else:
+                y_pred = model(x)
             train_inf_latencies.append((time.time() - start_inf) / x.size(0))
             scores = calculate_anomaly_score(y, y_pred, metric='mse')
             random_train_scores.extend(scores.tolist())
@@ -145,7 +165,7 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
     rt_labels = np.zeros(len(rt_scores)).astype(int)
     train_latency_avg = np.mean(train_inf_latencies) * 1000
     
-    for t_name, t_val in [("3-Sigma", threshold_3s), ("Robust", threshold_rb), ("Percentile", threshold_pc), ("Self-Learn", threshold_gmm), ("Optimal", threshold_opt)]:
+    for t_name, t_val in [("3-Sigma", threshold_3s), ("Robust", threshold_rb), ("Percentile", threshold_pc), ("POT", threshold_pot), ("Self-Learn", threshold_gmm), ("Optimal", threshold_opt)]:
         m = calculate_metrics(rt_scores, rt_labels, t_val)
         det_rate = np.sum(rt_scores > t_val) / len(rt_scores)
         print(f"   [{t_name:<10}] > F1: {m.get('F1', 0):.4f} | FAR: {m.get('FAR', 0):.4f} | Det Rate: {det_rate:.2%} | Thresh: {t_val:.6f}")
@@ -156,7 +176,7 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
     precision_path, recall_path, _ = precision_recall_curve(combined_labels, combined_scores)
     auprc = auc_score_func(recall_path, precision_path)
     
-    for t_name, t_val in [("3-Sigma", threshold_3s), ("Robust", threshold_rb), ("Percentile", threshold_pc), ("Self-Learn", threshold_gmm), ("Optimal", threshold_opt)]:
+    for t_name, t_val in [("3-Sigma", threshold_3s), ("Robust", threshold_rb), ("Percentile", threshold_pc), ("POT", threshold_pot), ("Self-Learn", threshold_gmm), ("Optimal", threshold_opt)]:
         m = calculate_metrics(combined_scores, combined_labels, t_val)
         det_rate = np.sum(test_scores > t_val) / len(test_scores)
         print(f"   [{t_name:<10}] > F1: {m.get('F1', 0):.4f} | FAR: {m.get('FAR', 0):.4f} | Det Rate: {det_rate:.2%} | Thresh: {t_val:.6f}")
@@ -167,11 +187,13 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
     # Save results (using Robust for summary)
     m_rb_final = calculate_metrics(combined_scores, combined_labels, threshold_rb)
     m_3s_final = calculate_metrics(combined_scores, combined_labels, threshold_3s)
+    m_pot_final = calculate_metrics(combined_scores, combined_labels, threshold_pot)
     
     result = {
         'name': name,
         'f1_3s': float(m_3s_final.get('F1', 0)),
         'f1_rb': float(m_rb_final.get('F1', 0)),
+        'f1_pot': float(m_pot_final.get('F1', 0)),
         'auc': float(m_rb_final.get('AUC', 0)),
         'far_rb': float(m_rb_final.get('FAR', 0)),
         'auprc': float(auprc),
@@ -300,12 +322,12 @@ def main():
         results[name] = res
         
     # Final Results Summary
-    print("\n" + "="*50)
-    print(f"{'Model':<20} | {'F1 (3s)':<8} | {'F1 (rb)':<8} | {'AUC':<8} | {'FAR (rb)':<8}")
-    print("-" * 65)
+    print("\n" + "="*60)
+    print(f"{'Model':<20} | {'F1 (3s)':<8} | {'F1 (rb)':<8} | {'F1 (POT)':<8} | {'AUC':<8} | {'FAR (rb)':<8}")
+    print("-" * 75)
     for name, res in results.items():
-        print(f"{name:<20} | {res['f1_3s']:<8.4f} | {res['f1_rb']:<8.4f} | {res['auc']:<8.4f} | {res['far_rb']:<8.4f}")
-    print("="*65)
+        print(f"{name:<20} | {res['f1_3s']:<8.4f} | {res['f1_rb']:<8.4f} | {res.get('f1_pot', 0):<8.4f} | {res['auc']:<8.4f} | {res['far_rb']:<8.4f}")
+    print("="*75)
 
 if __name__ == "__main__":
     main()
