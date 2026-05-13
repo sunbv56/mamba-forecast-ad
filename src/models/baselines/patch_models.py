@@ -72,7 +72,7 @@ class PatchLSTM(nn.Module):
         super().__init__()
         self.patching = CNNPatchEmbedding(in_channels, patch_size, stride, d_model)
         self.lstm = nn.LSTM(d_model, d_model, num_layers, batch_first=True)
-        self.head = FusionForecastHead(d_model, horizon, out_channels=in_channels)
+        self.head = FusionForecastHead(d_model, horizon, out_channels=in_channels, use_stats=False)
 
     def forward(self, x):
         x = self.patching(x)

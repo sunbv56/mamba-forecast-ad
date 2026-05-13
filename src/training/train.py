@@ -24,7 +24,7 @@ from src.models.baselines.tcn import TCNForecaster
 from src.models.baselines.modern_tcn import ModernTCNForecaster
 from src.models.baselines.transformer_small import iTransformer, PositionalEncoding
 from src.models.baselines.patch_models import PatchTST, PatchLSTM
-from src.models.mamba import HybridMambaCNN
+from src.models.mamba import HybridMambaCNN, MambaTS, MambaTSOfficial, MambaTSConfig
 from src.evaluation.anomaly_scorer import calculate_anomaly_score
 
 def count_parameters(model):
@@ -32,7 +32,7 @@ def count_parameters(model):
 from src.evaluation.metrics import calculate_threshold_3sigma, calculate_threshold_robust, calculate_threshold_percentile, calculate_threshold_gmm, find_best_threshold, calculate_metrics, calculate_threshold_pot
 
 class EarlyStopping:
-    def __init__(self, patience=10, verbose=False, delta=0, path='checkpoint.pt'):
+    def __init__(self, patience=3, verbose=False, delta=0, path='checkpoint.pt'):
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
@@ -72,15 +72,18 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
     
     lr = float(config['training'].get('learning_rate', 0.001))
     epochs = int(config['training'].get('epochs', 1))
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-    criterion = nn.MSELoss()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
+    # HuberLoss: robust hơn MSELoss với tín hiệu rung động có outlier cao
+    criterion = nn.HuberLoss(delta=1.0)
+    # CosineAnnealingLR: giảm LR từ từ theo hình cos, giúp Mamba thoát local minima
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=lr * 1e-2)
     scaler = torch.amp.GradScaler('cuda') if device.type == 'cuda' else None
     
     # Early Stopping setup
     save_dir = config['training'].get('save_dir', 'results/models')
     os.makedirs(save_dir, exist_ok=True)
     best_model_path = os.path.join(save_dir, f"{name.lower().replace('-', '_')}_best.pth")
-    early_stopping = EarlyStopping(patience=10, verbose=True, path=best_model_path)
+    early_stopping = EarlyStopping(patience=3, verbose=True, path=best_model_path)
     
     losses = []
     start_train = time.time()
@@ -92,23 +95,40 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         for batch in pbar:
             x, y = batch[0].to(device), batch[1].to(device)
             stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
+            oc = batch[4].to(device) if len(batch) > 4 else None
             
             optimizer.zero_grad()
             with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
                 if stats is not None and isinstance(model, HybridMambaCNN):
                     y_pred = model(x, stats)
+                elif oc is not None and isinstance(model, MambaTSOfficial):
+                    y_pred = model(x, oc)
                 else:
                     y_pred = model(x)
                 loss = criterion(y_pred, y)
             
             if scaler:
                 scaler.scale(loss).backward()
+                
+                # [NEW] Update VAST state for MambaTS-Official
+                if isinstance(model, MambaTSOfficial) and model.configs.VPT_mode == 1:
+                    with torch.no_grad():
+                        sample_loss = torch.mean((y_pred - y)**2, dim=(1, 2)).detach()
+                        model.batch_update_state(sample_loss)
+
                 scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 scaler.step(optimizer)
                 scaler.update()
             else:
                 loss.backward()
+                
+                # [NEW] Update VAST state for MambaTS-Official
+                if isinstance(model, MambaTSOfficial) and model.configs.VPT_mode == 1:
+                    with torch.no_grad():
+                        sample_loss = torch.mean((y_pred - y)**2, dim=(1, 2)).detach()
+                        model.batch_update_state(sample_loss)
+
                 torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
                 
@@ -128,18 +148,23 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
             for batch in val_loader:
                 x, y = batch[0].to(device), batch[1].to(device)
                 stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
+                oc = batch[4].to(device) if len(batch) > 4 else None
                 
                 with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
                     if stats is not None and isinstance(model, HybridMambaCNN):
                         y_pred = model(x, stats)
+                    elif oc is not None and isinstance(model, MambaTSOfficial):
+                        y_pred = model(x, oc)
                     else:
                         y_pred = model(x)
                     loss = criterion(y_pred, y)
                 val_loss += loss.item()
         
         avg_val_loss = val_loss / len(val_loader)
-        print(f"Epoch [{epoch}/{epochs}] - Val Loss: {avg_val_loss:.6f}")
+        current_lr = scheduler.get_last_lr()[0]
+        print(f"Epoch [{epoch}/{epochs}] - Val Loss: {avg_val_loss:.6f} | LR: {current_lr:.2e}")
         
+        scheduler.step()
         early_stopping(avg_val_loss, model)
         if early_stopping.early_stop:
             print("Early stopping triggered!")
@@ -152,59 +177,79 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
     print(f"Loading best model from {best_model_path}...")
     model.load_state_dict(torch.load(best_model_path, weights_only=True))
 
-    # --- Threshold Calculation (from Train Set) ---
+    # --- [FIX #3] Threshold Calculation (from ALL Train batches — no 21-batch limit) ---
     print(f"Calculating threshold for {name}...")
     train_scores_sample = []
     model.eval()
     with torch.no_grad():
-        for i, batch in enumerate(train_loader):
-            if i > 20: break 
+        for batch in train_loader:
             x, y = batch[0].to(device), batch[1].to(device)
             stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
+            oc = batch[4].to(device) if len(batch) > 4 else None
             
             if stats is not None and isinstance(model, HybridMambaCNN):
                 y_pred = model(x, stats)
+            elif oc is not None and isinstance(model, MambaTSOfficial):
+                y_pred = model(x, oc)
             else:
                 y_pred = model(x)
-            scores = calculate_anomaly_score(y, y_pred, metric='mse')
+            scores = calculate_anomaly_score(y, y_pred, metric='mse', normalized=False)
             train_scores_sample.extend(scores.tolist())
-            
-    threshold_3s = calculate_threshold_3sigma(np.array(train_scores_sample))
-    threshold_rb = calculate_threshold_robust(np.array(train_scores_sample))
-    threshold_pc = calculate_threshold_percentile(np.array(train_scores_sample), q=99.7)
-    threshold_pot = calculate_threshold_pot(np.array(train_scores_sample), q=1e-3)
 
-    # --- 1. Evaluation on Test Set (To calculate all thresholds) ---
+    train_scores_sample = np.array(train_scores_sample)
+    threshold_3s  = calculate_threshold_3sigma(train_scores_sample)
+    threshold_rb  = calculate_threshold_robust(train_scores_sample)
+    threshold_pc  = calculate_threshold_percentile(train_scores_sample, q=99.7)
+    threshold_pot = calculate_threshold_pot(train_scores_sample, q=1e-3)
+
+    # --- [FIX #1] Evaluation on Test Set — thu thập actual labels từ dataset ---
     print(f"Evaluating {name} on Test Set...")
-    test_scores = []
+    test_scores   = []
+    test_labels   = []   # [FIX #1] actual window-level labels
     test_latencies = []
     model.eval()
     with torch.no_grad():
         for batch in test_loader:
             x, y = batch[0].to(device), batch[1].to(device)
             stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
-            
+            oc = batch[4].to(device) if len(batch) > 4 else None
+
             start_inf = time.time()
             if stats is not None and isinstance(model, HybridMambaCNN):
                 y_pred = model(x, stats)
+            elif oc is not None and isinstance(model, MambaTSOfficial):
+                y_pred = model(x, oc)
             else:
                 y_pred = model(x)
             test_latencies.append((time.time() - start_inf) / x.size(0))
-            scores = calculate_anomaly_score(y, y_pred, metric='mse')
+
+            scores = calculate_anomaly_score(y, y_pred, metric='mse', normalized=False)
             test_scores.extend(scores.tolist())
-    
-    test_scores = np.array(test_scores)
+
+            # batch[3] = window-level label (int 0/1) từ B02Dataset
+            if len(batch) > 3:
+                labels_batch = batch[3]
+                if hasattr(labels_batch, 'numpy'):
+                    test_labels.extend(labels_batch.numpy().tolist())
+                else:
+                    test_labels.extend([int(l) for l in labels_batch])
+            else:
+                test_labels.extend([0] * x.size(0))  # fallback
+
+    test_scores      = np.array(test_scores)
+    test_labels      = np.array(test_labels, dtype=int)
     test_latency_avg = np.mean(test_latencies) * 1000
-    
-    combined_scores = np.concatenate([train_scores_sample, test_scores])
-    combined_labels = np.concatenate([
-        np.zeros(len(train_scores_sample)), 
-        np.ones(len(test_scores))
-    ]).astype(int)
-    
-    # Self-learning and Optimal thresholds
-    threshold_gmm = calculate_threshold_gmm(combined_scores)
-    threshold_opt, _ = find_best_threshold(combined_scores, combined_labels)
+
+    n_fault = int(test_labels.sum())
+    n_total = len(test_labels)
+    print(f"  Test label distribution: {n_fault}/{n_total} anomaly windows ({n_fault/n_total:.1%})")
+
+    # GMM cần cả healthy và anomaly scores để fit 2 cụm
+    combined_for_gmm = np.concatenate([train_scores_sample, test_scores])
+    threshold_gmm = calculate_threshold_gmm(combined_for_gmm)
+
+    # [FIX #1] Optimal threshold: tìm trên test set với actual labels
+    threshold_opt, _ = find_best_threshold(test_scores, test_labels)
 
     # --- 2. Evaluation on 4000 Random Train Samples (Healthy Check) ---
     print(f"\n>>> EVALUATION ON TRAIN (4000 random healthy samples)...")
@@ -218,14 +263,17 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         for batch in temp_loader:
             x, y = batch[0].to(device), batch[1].to(device)
             stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
+            oc = batch[4].to(device) if len(batch) > 4 else None
             
             start_inf = time.time()
             if stats is not None and isinstance(model, HybridMambaCNN):
                 y_pred = model(x, stats)
+            elif oc is not None and isinstance(model, MambaTSOfficial):
+                y_pred = model(x, oc)
             else:
                 y_pred = model(x)
             train_inf_latencies.append((time.time() - start_inf) / x.size(0))
-            scores = calculate_anomaly_score(y, y_pred, metric='mse')
+            scores = calculate_anomaly_score(y, y_pred, metric='mse', normalized=False)
             random_train_scores.extend(scores.tolist())
     
     rt_scores = np.array(random_train_scores)
@@ -238,23 +286,28 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         print(f"   [{t_name:<10}] > F1: {m.get('F1', 0):.4f} | FAR: {m.get('FAR', 0):.4f} | Det Rate: {det_rate:.2%} | Thresh: {t_val:.6f}")
     print(f"   > Avg Latency: {train_latency_avg:.4f} ms/sample")
 
-    # --- 3. Evaluation on Test Set (Anomaly Performance) ---
+    # --- [FIX #1] Evaluation on Test Set — dùng actual labels ---
     print(f"\n>>> EVALUATION ON TEST (Anomaly Detection Performance)...")
-    precision_path, recall_path, _ = precision_recall_curve(combined_labels, combined_scores)
-    auprc = auc_score_func(recall_path, precision_path)
-    
-    for t_name, t_val in [("3-Sigma", threshold_3s), ("Robust", threshold_rb), ("Percentile", threshold_pc), ("POT", threshold_pot), ("Self-Learn", threshold_gmm), ("Optimal", threshold_opt)]:
-        m = calculate_metrics(combined_scores, combined_labels, t_val)
+    if len(np.unique(test_labels)) > 1:
+        precision_path, recall_path, _ = precision_recall_curve(test_labels, test_scores)
+        auprc = auc_score_func(recall_path, precision_path)
+    else:
+        auprc = 0.0
+        print("  [WARN] Test set contains only one class — AUPRC undefined.")
+
+    for t_name, t_val in [("3-Sigma", threshold_3s), ("Robust", threshold_rb), ("Percentile", threshold_pc),
+                          ("POT", threshold_pot), ("Self-Learn", threshold_gmm), ("Optimal", threshold_opt)]:
+        m = calculate_metrics(test_scores, test_labels, t_val)
         det_rate = np.sum(test_scores > t_val) / len(test_scores)
         print(f"   [{t_name:<10}] > F1: {m.get('F1', 0):.4f} | FAR: {m.get('FAR', 0):.4f} | Det Rate: {det_rate:.2%} | Thresh: {t_val:.6f}")
     print(f"   > AUPRC: {auprc:.4f} | Avg Latency: {test_latency_avg:.4f} ms/sample")
 
     print(f"\n✅ {name} Finished!")
 
-    # Save results (using Robust for summary)
-    m_rb_final = calculate_metrics(combined_scores, combined_labels, threshold_rb)
-    m_3s_final = calculate_metrics(combined_scores, combined_labels, threshold_3s)
-    m_pot_final = calculate_metrics(combined_scores, combined_labels, threshold_pot)
+    # Save results (using Robust for summary) — actual labels
+    m_rb_final  = calculate_metrics(test_scores, test_labels, threshold_rb)
+    m_3s_final  = calculate_metrics(test_scores, test_labels, threshold_3s)
+    m_pot_final = calculate_metrics(test_scores, test_labels, threshold_pot)
     
     result = {
         'name': name,
@@ -289,7 +342,8 @@ def main():
     parser.add_argument("--epochs", type=int, help="Override epochs from config.")
     parser.add_argument("--batch_size", type=int, help="Override batch size.")
     parser.add_argument("--data_dir", type=str, help="Override data directory.")
-    parser.add_argument("--subset_ratio", type=int, default=30, help="Take every N-th sample for faster training (default: 1).")
+    parser.add_argument("--file_subset_ratio", type=int, default=1,
+                        help="[FIX #3] Sample every N-th FILE in train+val splits (preserves temporal continuity). Default: 10.")
     
     args = parser.parse_args()
     
@@ -306,21 +360,31 @@ def main():
     
     # --- Dataset Setup ---
     processed_dir = config['data']['processed_dir']
-    lookback = config['data'].get('lookback', 1024)
-    horizon = config['data'].get('forecast_len', 512)
-    stride = config['data'].get('stride', 512)
+    lookback = config['data'].get('lookback', 4096)
+    horizon = config['data'].get('horizon', 1024)
+    sampling_rate = config['data'].get('sampling_rate', 128000)
+    patch_size = config['data'].get('patch_size', 2048)
+    stride = config['data'].get('stride', 1024)
+    train_ratio = config['data'].get('train_ratio', 0.5)
+    skip_ratio = config['data'].get('skip_ratio', 0.1)
+    highpass_freq = config['data'].get('highpass_freq', 1000)
     
-    print(f"Loading datasets from {processed_dir}...")
-    train_dataset = B02Dataset(processed_dir, lookback, horizon, stride, split='train')
-    val_dataset = B02Dataset(processed_dir, lookback, horizon, stride, split='val')
-    test_dataset = B02Dataset(processed_dir, lookback, horizon, stride, split='test')
+    print(f"Loading datasets from {processed_dir} (Skip: {skip_ratio}, Train: {train_ratio})...")
+    # [FIX #2] RMS-based split; [FIX #3] file_sample_ratio áp dụng cho cả train VÀ val
+    # Test giữ nguyên full để evaluation chính xác (chạy 1 lần, không ảnh hưởng tốc độ training)
+    train_dataset = B02Dataset(processed_dir, lookback, horizon, stride, split='train',
+                               file_sample_ratio=args.file_subset_ratio, train_ratio=train_ratio, skip_ratio=skip_ratio, 
+                               normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
     
-    # Subset logic for faster experimentation
-    if args.subset_ratio > 1:
-        print(f"Applying subset sampling: 1/{args.subset_ratio}")
-        train_dataset = Subset(train_dataset, range(0, len(train_dataset), args.subset_ratio))
-        val_dataset = Subset(val_dataset, range(0, len(val_dataset), args.subset_ratio // 3 + 1))
-        test_dataset = Subset(test_dataset, range(0, len(test_dataset), args.subset_ratio // 3 + 1))
+    # [FIX] Đồng bộ chuẩn hóa OC giữa các tập dữ liệu
+    oc_stats = getattr(train_dataset, 'oc_stats', None)
+    
+    val_dataset   = B02Dataset(processed_dir, lookback, horizon, stride, split='val',
+                               file_sample_ratio=args.file_subset_ratio, oc_stats=oc_stats, train_ratio=train_ratio, skip_ratio=skip_ratio, 
+                               normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
+    test_dataset  = B02Dataset(processed_dir, lookback, horizon, stride, split='test',
+                               file_sample_ratio=1, oc_stats=oc_stats, train_ratio=train_ratio, skip_ratio=skip_ratio, 
+                               normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
         
     batch_size = int(config['training'].get('batch_size', 128))
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -340,35 +404,46 @@ def main():
         "Mamba1-Hybrid": HybridMambaCNN({
             'model': {
                 'mamba_version': 1,
-                'cnn_out_channels': 64, 'mamba_d_model': 64, 'mamba_n_layer': 4,
-                'mamba_d_state': 16, 'mamba_d_conv': 4, 'mamba_expand': 3,
-                'forecast_len': horizon, 'patch_size': 64, 'stride': 64,
-                'in_channels': 2, 'out_channels': 2
+                'mamba_d_model': config['model'].get('mamba_d_model', 64), 
+                'mamba_n_layer': config['model'].get('mamba_n_layer', 4),
+                'mamba_d_state': config['model'].get('mamba_d_state', 16), 
+                'mamba_d_conv': config['model'].get('mamba_d_conv', 4), 
+                'mamba_expand': config['model'].get('mamba_expand', 2),
+                'forecast_len': horizon, 
+                'patch_size': patch_size, 
+                'stride': stride,
+                'in_channels': 2, 'lookback': lookback,
+                'decomp_kernel': config['model'].get('decomp_kernel', 25), 
+                'use_multiscale': True,
             },
-            'data': {'patch_size': 64, 'stride': 64}
+            'data': {
+                'patch_size': patch_size, 
+                'stride': stride, 
+                'lookback': lookback
+            }
         }),
-        # "Mamba2-Hybrid": HybridMambaCNN({
-        #     'model': {
-        #         'mamba_version': 2,
-        #         'cnn_out_channels': 64, 'mamba_d_model': 64, 'mamba_n_layer': 4,
-        #         'mamba_d_state': 64, 'mamba_d_conv': 4, 'mamba_expand': 2,
-        #         'forecast_len': horizon, 'patch_size': 64, 'stride': 64,
-        #         'in_channels': 2, 'out_channels': 2
-        #     },
-        #     'data': {'patch_size': 64, 'stride': 64}
-        # }),
-        # "Mamba3-Hybrid": HybridMambaCNN({
-        #     'model': {
-        #         'mamba_version': 3,
-        #         'cnn_out_channels': 64, 'mamba_d_model': 64, 'mamba_n_layer': 4,
-        #         'mamba_d_state': 64, 'forecast_len': horizon, 'patch_size': 64, 'stride': 64,
-        #         'in_channels': 2, 'out_channels': 2,
-        #         'mamba_kwargs': {
-        #             'headdim': 64, 'is_mimo': True, 'mimo_rank': 4, 'chunk_size': 16
-        #         }
-        #     },
-        #     'data': {'patch_size': 64, 'stride': 64}
-        # })
+        # "MambaTS-Paper": MambaTS(
+        #     in_channels=2,
+        #     lookback=lookback,
+        #     forecast_len=horizon,
+        #     patch_size=64,
+        #     stride=32,
+        #     d_model=32,
+        #     n_layers=4,
+        #     use_vas=False
+        # ),
+        "MambaTS-Official": MambaTSOfficial(MambaTSConfig(
+            in_channels=2,
+            lookback=lookback,
+            forecast_len=horizon,
+            patch_size=64,
+            stride=32,
+            d_model=64,
+            n_layers=4,
+            dropout=0.2, # Paper suggested 0.2-0.3
+            VPT_mode=1, # Enable Variable-Aware Scanning
+            ATSP_solver='SA'
+        )),
     }
     
     if args.model == "all":

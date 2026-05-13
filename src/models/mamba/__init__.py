@@ -2,5 +2,15 @@ from .hybrid_mamba import HybridMambaCNN
 from .mamba_encoder import MambaEncoder
 from .cnn_patching import CNNPatchEmbedding
 from .fusion_head import FusionForecastHead
+from .mamba_ts import MambaTS
+from .mamba_ts_official import MambaTSOfficial, MambaTSConfig
 
-__all__ = ['HybridMambaCNN', 'MambaEncoder', 'CNNPatchEmbedding', 'FusionForecastHead']
+__all__ = [
+    'HybridMambaCNN', 
+    'MambaEncoder', 
+    'CNNPatchEmbedding', 
+    'FusionForecastHead', 
+    'MambaTS',
+    'MambaTSOfficial',
+    'MambaTSConfig'
+]

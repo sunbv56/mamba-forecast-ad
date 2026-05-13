@@ -4,25 +4,28 @@ data:
   raw_dir: "data/raw/B02"
   processed_dir: "data/processed"
   sampling_rate: 128000
-  patch_size: 1024 # Example: group 1024 points into one patch
-  stride: 512      # Overlapping
-  seq_len: 2048    # Sequence length after patching
+  highpass_freq: 2000     # 0 để tắt lọc (Học theo năng lượng Energy)
+  patch_size: 2048     # Giá trị cũ
+  stride: 1024         
+  lookback: 4096       
+  horizon: 1024        
+  skip_ratio: 0.1
+  train_ratio: 0.5
 
 model:
   cnn_out_channels: 64
-  mamba_d_model: 128
+  mamba_d_model: 64
   mamba_n_layer: 4
   mamba_d_state: 16
   mamba_d_conv: 4
   mamba_expand: 2
-  forecast_len: 64
   bidirectional: false
   decomp_kernel: 25
 
 training:
-  batch_size: 32
-  learning_rate: 1e-4
-  epochs: 100
+  batch_size: 128
+  learning_rate: 5e-4
+  epochs: 50
   device: "cuda"
 
 logging:

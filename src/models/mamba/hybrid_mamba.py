@@ -1,76 +1,153 @@
 import torch
 import torch.nn as nn
-from .layers import SimplePatchEmbedding
+from .layers import RevIN, SeriesDecomposition, MultiScalePatchEmbedding, SimplePatchEmbedding
 from .mamba_encoder import MambaEncoder
 from .fusion_head import FusionForecastHead
 
+
 class HybridMambaCNN(nn.Module):
+    """
+    CI-Mamba++ (Channel-Independent Mamba with Decomposition & RevIN).
+
+    Kiến trúc:
+        [Input] (B, C, L)
+            │
+        [RevIN]   ← chuẩn hóa, lưu mean/std để denorm đầu ra
+            │
+        [Series Decomposition]
+           ┌───────────────┐
+      [Seasonal branch]  [Trend branch]
+    MultiScalePatch       Linear(L → H)
+         │
+     MambaEncoder (CI)
+         │
+     FusionHead
+           └───────────────┘
+               [Add]
+        [RevIN denorm]
+            │
+        [Output] (B, C, H)
+
+    Ưu điểm so với phiên bản cũ:
+    - RevIN: ổn định training khi dữ liệu non-stationary (bearing degradation).
+    - Series Decomp: Trend & Seasonal được xử lý tách biệt → Mamba chỉ lo phần
+      dao động nhanh, Linear lo xu hướng → hội tụ nhanh hơn nhiều.
+    - MultiScalePatchEmbedding: bắt được đặc trưng tần số cao, vừa và thấp.
+    - Stats head (FusionHead) vẫn giữ nguyên để tương thích với pipeline hiện tại.
+    """
+
     def __init__(self, config):
-        """
-        CI-Mamba: Channel-Independent Mamba.
-        Xử lý từng kênh độc lập qua backbone Mamba chung.
-        """
         super().__init__()
         model_cfg = config['model']
-        data_cfg = config.get('data', {})
-        
-        in_channels = model_cfg.get('in_channels', data_cfg.get('input_dim', 1))
-        out_channels = model_cfg.get('out_channels', data_cfg.get('input_dim', 1))
-        patch_size = model_cfg.get('patch_size', data_cfg.get('patch_size', 64))
-        stride = model_cfg.get('stride', data_cfg.get('stride', 64))
-        
-        # 1. Patching (Channel-Independent)
-        self.patching = SimplePatchEmbedding(
-            patch_size=patch_size,
-            stride=stride,
-            embed_dim=model_cfg['mamba_d_model']
-        )
-        
-        # 2. Mamba Backbone (Shared across channels)
-        # Tự động ánh xạ các tham số từ config cũ sang tham số MambaEncoder
+        data_cfg  = config.get('data', {})
+
+        # --- Hyper-parameters ---
+        in_channels  = model_cfg.get('in_channels',  data_cfg.get('input_dim', 1))
+        patch_size   = model_cfg.get('patch_size',   data_cfg.get('patch_size', 64))
+        stride       = model_cfg.get('stride',       data_cfg.get('stride', 32))
+        d_model      = model_cfg['mamba_d_model']
+        forecast_len = model_cfg['forecast_len']
+        lookback     = model_cfg.get('lookback', data_cfg.get('lookback', 1024))
+        decomp_kernel = model_cfg.get('decomp_kernel', 25)
+
+        # ------------------------------------------------------------------
+        # 1. RevIN — học được affine per-channel
+        # ------------------------------------------------------------------
+        self.revin = RevIN(num_features=in_channels, affine=True)
+
+        # ------------------------------------------------------------------
+        # 2. Series Decomposition
+        # ------------------------------------------------------------------
+        self.decomp = SeriesDecomposition(kernel_size=decomp_kernel)
+
+        # ------------------------------------------------------------------
+        # 3a. Seasonal Branch — Multi-scale Patch + Mamba
+        # ------------------------------------------------------------------
+        use_multiscale = model_cfg.get('use_multiscale', True)
+        if use_multiscale:
+            self.patching = MultiScalePatchEmbedding(
+                patch_size=patch_size,
+                stride=stride,
+                embed_dim=d_model
+            )
+        else:
+            self.patching = SimplePatchEmbedding(
+                patch_size=patch_size,
+                stride=stride,
+                embed_dim=d_model
+            )
+
+        # Mamba backbone (Channel-Independent: channels folded into batch dim)
         mamba_kwargs = model_cfg.get('mamba_kwargs', {}).copy()
         if 'mamba_d_state' in model_cfg: mamba_kwargs.setdefault('d_state', model_cfg['mamba_d_state'])
-        if 'mamba_d_conv' in model_cfg: mamba_kwargs.setdefault('d_conv', model_cfg['mamba_d_conv'])
-        if 'mamba_expand' in model_cfg: mamba_kwargs.setdefault('expand', model_cfg['mamba_expand'])
-        
+        if 'mamba_d_conv'  in model_cfg: mamba_kwargs.setdefault('d_conv',  model_cfg['mamba_d_conv'])
+        if 'mamba_expand'  in model_cfg: mamba_kwargs.setdefault('expand',  model_cfg['mamba_expand'])
+
         self.mamba = MambaEncoder(
-            d_model=model_cfg['mamba_d_model'],
+            d_model=d_model,
             n_layer=model_cfg['mamba_n_layer'],
             version=model_cfg.get('mamba_version', 1),
-            bidirectional=model_cfg.get('bidirectional', False), # Default to False for speed
+            bidirectional=model_cfg.get('bidirectional', False),
             **mamba_kwargs
         )
-        
-        # 3. Forecasting Head
-        self.head = FusionForecastHead(
-            d_model=model_cfg['mamba_d_model'],
-            forecast_len=model_cfg['forecast_len'],
-            out_channels=1 # In CI mode, each channel is processed to output its own forecast
+
+        # Forecasting head for seasonal branch (CI mode → out_channels=1 per head)
+        self.seasonal_head = FusionForecastHead(
+            d_model=d_model,
+            forecast_len=forecast_len,
+            out_channels=1
         )
 
+        # ------------------------------------------------------------------
+        # 3b. Trend Branch — simple Linear (DLinear-style)
+        # ------------------------------------------------------------------
+        self.trend_head = nn.Linear(lookback, forecast_len)
+
+        # ------------------------------------------------------------------
+        # 4. Learnable mix weight (α·seasonal + (1-α)·trend per channel)
+        # ------------------------------------------------------------------
+        self.mix_alpha = nn.Parameter(torch.full((in_channels,), 0.5))
+
     def forward(self, x, stats=None):
-        # x: (Batch, Channels, Length)
+        """
+        x     : (Batch, Channels, Length)
+        stats : (Batch, Channels, 8)   [optional physical features]
+        →       (Batch, Channels, forecast_len)
+        """
         B, C, L = x.shape
-        
-        # Bước 1: Patching
-        # x -> (Batch, Channels, Num_Patches, d_model)
-        x = self.patching(x)
-        B, C, N, D = x.shape
-        
-        # Bước 2: Backbone (CI - reshape Channels into Batch)
-        x = x.reshape(B * C, N, D)
-        x = self.mamba(x) # (B*C, N, D)
-        
-        # Xử lý stats cho CI mode
+
+        # --- RevIN normalize ---
+        x = self.revin(x, mode='norm')                # (B, C, L)
+
+        # --- Series Decomposition ---
+        seasonal, trend = self.decomp(x)              # both (B, C, L)
+
+        # ── Trend Branch ──────────────────────────────────────────────────
+        trend_out = self.trend_head(trend)             # (B, C, forecast_len)
+
+        # ── Seasonal Branch ───────────────────────────────────────────────
+        # Patching: (B, C, L) → (B, C, N, d_model)
+        s = self.patching(seasonal)                    # (B, C, N, D)
+        _, _, N, D = s.shape
+
+        # Channel-Independent: fold C into batch
+        s = s.reshape(B * C, N, D)                    # (B*C, N, D)
+        s = self.mamba(s)                              # (B*C, N, D)
+
+        # Stats for CI mode
+        stats_ci = None
         if stats is not None:
-            # stats: (B, C, 8) -> (B*C, 8)
-            stats = stats.reshape(B * C, -1)
-        
-        # Bước 3: Head
-        forecast = self.head(x, stats=stats) # (B*C, out_channels_per_head, forecast_len)
-        
-        # Reshape forecast back
-        # forecast: (B*C, 1, forecast_len) -> (B, C, forecast_len)
-        forecast = forecast.reshape(B, C, -1)
-        
+            stats_ci = stats.reshape(B * C, -1)       # (B*C, 8)
+
+        s_out = self.seasonal_head(s, stats=stats_ci)  # (B*C, 1, forecast_len)
+        s_out = s_out.reshape(B, C, -1)                # (B, C, forecast_len)
+
+        # ── Learnable Mixing ──────────────────────────────────────────────
+        alpha = torch.sigmoid(self.mix_alpha).view(1, C, 1)   # (1, C, 1)
+        forecast = alpha * s_out + (1.0 - alpha) * trend_out  # (B, C, forecast_len)
+
+        # --- RevIN de-normalize ---
+        forecast = self.revin(forecast, mode='denorm')  # (B, C, forecast_len)
+
         return forecast
+

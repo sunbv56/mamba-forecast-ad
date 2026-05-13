@@ -5,8 +5,13 @@ from scipy.stats import genpareto
 def calculate_threshold_pot(scores, q=1e-3, init_level=0.98):
     """
     Tính ngưỡng Peak Over Threshold (POT) dựa trên Extreme Value Theory.
+    Bổ sung clip outlier để tránh nhiễu tập train làm vọt ngưỡng.
     """
     scores = np.array(scores)
+    # Clip outliers ở mức P99.9 để bảo vệ fitting
+    cap = np.percentile(scores, 99.9)
+    scores = np.clip(scores, None, cap)
+    
     t = np.quantile(scores, init_level)
     peaks = scores[scores > t] - t
     if len(peaks) == 0:
@@ -41,7 +46,7 @@ def calculate_threshold_robust(healthy_scores, k=3):
     threshold = median + k * iqr
     return threshold
 
-def find_best_threshold(anomaly_scores, true_labels, num_steps=100):
+def find_best_threshold(anomaly_scores, true_labels, num_steps=1000):
     """
     Tự động tìm ngưỡng tối ưu bằng cách quét qua nhiều giá trị trên tập dữ liệu có nhãn.
     """
