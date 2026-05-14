@@ -241,9 +241,11 @@ Percentile (99.7) & 0.9852 & 2.13 & 1.6171 \\
 \end{table}
 
 \subsection{Correlation with Physical Degradation Trends}
-A key advantage of HybridMamba++ is its alignment with the physical degradation process. As shown in our analysis, the Anomaly Score (MSE-based) exhibits a strong correlation with traditional physical indicators such as Root Mean Square (RMS) and Kurtosis. When incipient degradation occurs (at approximately the 335th file in the FEMTO-ST test sequence), the Anomaly Score reacts instantaneously with a sharp jump, preceding total failure. This demonstrates that the model captures meaningful structural changes in vibration signatures rather than mere stochastic noise.
+A key advantage of HybridMamba++ is its alignment with the physical degradation process across different mechanical units. As shown in Figures~\ref{fig:degradation_trend_b02} and \ref{fig:degradation_trend_b04}, the Anomaly Score (MSE-based) exhibits a strong correlation with traditional physical indicators such as Root Mean Square (RMS) and Kurtosis. When incipient degradation occurs, the Anomaly Score reacts instantaneously with a sharp jump, preceding total failure. This behavior is consistent across different datasets (B02 and B04), demonstrating that the model captures universal structural changes in vibration signatures rather than over-fitting to a single bearing's characteristics.
 
-\Figure[t!](0pt)(0pt){degradation_trend_extended.png}{Correlation analysis between the HybridMamba++ Anomaly Score and physical degradation indicators (RMS and Kurtosis) for bearing B02. The red line represents the MSE-based anomaly score, which accurately tracks the structural degradation preceding the final failure.}{fig:degradation_trend}
+\Figure[t!](0pt)(0pt){full_lifecycle_trend_B02.png}{Full life-cycle degradation trend for bearing B02. The shaded regions indicate the initial skip period (gray), training/validation area (blue), and the test/fault area (red). The red line (Anomaly Score) accurately tracks the physical degradation trend indicated by RMS and Kurtosis.}{fig:degradation_trend_b02}
+
+\Figure[t!](0pt)(0pt){full_lifecycle_trend_B04.png}{Cross-dataset validation on bearing B04. Despite differences in mechanical failure modes, HybridMamba++ maintains high sensitivity to incipient faults, showing consistent correlation with physical energy shifts and structural impact transients (Kurtosis).}{fig:degradation_trend_b04}
 
 \subsection{Inference Efficiency for Edge Deployment}
 HybridMamba++ exhibits the lowest inference latency (0.0673 ms per sample), which is 45\% faster than the Transformer baseline. This efficiency stems from the linear complexity of the selective SSM mechanism and the lightweight convolutional patch embedding.

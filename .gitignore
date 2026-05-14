@@ -182,5 +182,9 @@ wandb/
 *.pth
 *.h5
 rtk
-.agents/rules/antigravity-rtk-rules.md
+.agents/
+.cursor/
 tmp_project/
+academic_research_skills/
+karpathy_skills/
+*skills/
