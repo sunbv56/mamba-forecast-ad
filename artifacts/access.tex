@@ -149,7 +149,7 @@ The same statistics $(\mu_X, \sigma_X)$ are used to normalize the target $Y$ and
 \subsection{HybridMamba++ Architecture}
 \label{sec:architecture}
 
-\Figure[t!](0pt)(0pt){ci_mamba_processing.png}{The end-to-end processing pipeline of HybridMamba++. The workflow encompasses five stages: (1) Raw data acquisition and windowing; (2) Preprocessing via RevIN and physical feature extraction; (3) Hybrid encoding through series decomposition and Mamba backbone; (4) Forecasting with adaptive denormalization; and (5) Anomaly detection using MSE-based residual analysis and POT thresholding.}{fig:pipeline}
+{\setkeys{Gin}{width=0.5\textwidth}\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt){ci_mamba_processing.png}{The end-to-end processing pipeline of HybridMamba++. The workflow encompasses five stages: (1) Raw data acquisition and windowing; (2) Preprocessing via RevIN and physical feature extraction; (3) Hybrid encoding through series decomposition and Mamba backbone; (4) Forecasting with adaptive denormalization; and (5) Anomaly detection using MSE-based residual analysis and POT thresholding.}{fig:pipeline}}
 
 The architecture of HybridMamba++ consists of three primary modules: (1) Series Decomposition, (2) Multi-scale Patching, and (3) Selective SSM Encoding.
 
@@ -183,7 +183,7 @@ The anomaly score $s$ for each window is calculated as the Mean Squared Error (M
     s = \frac{1}{C \cdot K} \sum_{c=1}^C \sum_{k=1}^K (Y_{c,k} - \hat{Y}_{c,k})^2
 \end{equation}
 
-To define a robust threshold $z_q$, we utilize the Peak-Over-Threshold (POT) method. Given a high quantile $t$ (e.g., P98), we fit a Generalized Pareto Distribution (GPD) to the excesses $E = \{s_i - t \mid s_i > t\}$. The final threshold $z_q$ for a target probability $q$ is:
+To define a robust threshold $z_q$, we utilize the Peak-Over-Threshold (POT) method. Given a high quantile $t$ (e.g., $P_{98}$), we fit a Generalized Pareto Distribution (GPD) to the excesses $E = \{s_i - t \mid s_i > t\}$. The final threshold $z_q$ for a target probability $q$ is:
 \begin{equation}
     z_q = t + \frac{\sigma}{\gamma} \left( \left( \frac{n}{N_t} q \right)^{-\gamma} - 1 \right)
 \end{equation}
@@ -243,9 +243,9 @@ Percentile (99.7) & 0.9852 & 2.13 & 1.6171 \\
 \subsection{Correlation with Physical Degradation Trends}
 A key advantage of HybridMamba++ is its alignment with the physical degradation process across different mechanical units. As shown in Figures~\ref{fig:degradation_trend_b02} and \ref{fig:degradation_trend_b04}, the Anomaly Score (MSE-based) exhibits a strong correlation with traditional physical indicators such as Root Mean Square (RMS) and Kurtosis. When incipient degradation occurs, the Anomaly Score reacts instantaneously with a sharp jump, preceding total failure. This behavior is consistent across different datasets (B02 and B04), demonstrating that the model captures universal structural changes in vibration signatures rather than over-fitting to a single bearing's characteristics.
 
-\Figure[t!](0pt)(0pt){full_lifecycle_trend_B02.png}{Full life-cycle degradation trend for bearing B02. The shaded regions indicate the initial skip period (gray), training/validation area (blue), and the test/fault area (red). The red line (Anomaly Score) accurately tracks the physical degradation trend indicated by RMS and Kurtosis.}{fig:degradation_trend_b02}
+{\setkeys{Gin}{width=0.8\textwidth}\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt){full_lifecycle_trend_B02.png}{Full life-cycle degradation trend for bearing B02. The shaded regions indicate the initial skip period (gray), training/validation area (blue), and the test/fault area (red). The red line (Anomaly Score) accurately tracks the physical degradation trend indicated by RMS and Kurtosis.}{fig:degradation_trend_b02}}
 
-\Figure[t!](0pt)(0pt){full_lifecycle_trend_B04.png}{Cross-dataset validation on bearing B04. Despite differences in mechanical failure modes, HybridMamba++ maintains high sensitivity to incipient faults, showing consistent correlation with physical energy shifts and structural impact transients (Kurtosis).}{fig:degradation_trend_b04}
+{\setkeys{Gin}{width=0.8\textwidth}\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt){full_lifecycle_trend_B04.png}{Cross-dataset validation on bearing B04. Despite differences in mechanical failure modes, HybridMamba++ maintains high sensitivity to incipient faults, showing consistent correlation with physical energy shifts and structural impact transients (Kurtosis).}{fig:degradation_trend_b04}}
 
 \subsection{Inference Efficiency for Edge Deployment}
 HybridMamba++ exhibits the lowest inference latency (0.0673 ms per sample), which is 45\% faster than the Transformer baseline. This efficiency stems from the linear complexity of the selective SSM mechanism and the lightweight convolutional patch embedding.
