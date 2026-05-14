@@ -18,7 +18,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")
 if project_root not in sys.path:
     sys.path.append(project_root)
 
-from src.data import B02Dataset
+from src.data import BearingDataset, MultiBearingDataset
 from src.models.baselines.lstm import LSTMForecaster
 from src.models.baselines.tcn import TCNForecaster
 from src.models.baselines.modern_tcn import ModernTCNForecaster
@@ -226,7 +226,7 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
             scores = calculate_anomaly_score(y, y_pred, metric='mse', normalized=False)
             test_scores.extend(scores.tolist())
 
-            # batch[3] = window-level label (int 0/1) từ B02Dataset
+            # batch[3] = window-level label (int 0/1) từ BearingDataset
             if len(batch) > 3:
                 labels_batch = batch[3]
                 if hasattr(labels_batch, 'numpy'):
@@ -359,7 +359,15 @@ def main():
     print(f"Using device: {device}")
     
     # --- Dataset Setup ---
-    processed_dir = config['data']['processed_dir']
+    # Ưu tiên train_datasets/test_datasets nếu có, ngược lại dùng processed_dir
+    train_dirs = config['data'].get('train_datasets')
+    test_dirs = config['data'].get('test_datasets')
+    
+    if train_dirs is None:
+        train_dirs = [config['data']['processed_dir']]
+    if test_dirs is None:
+        test_dirs = [config['data']['processed_dir']]
+
     lookback = config['data'].get('lookback', 4096)
     horizon = config['data'].get('horizon', 1024)
     sampling_rate = config['data'].get('sampling_rate', 128000)
@@ -369,22 +377,22 @@ def main():
     skip_ratio = config['data'].get('skip_ratio', 0.1)
     highpass_freq = config['data'].get('highpass_freq', 1000)
     
-    print(f"Loading datasets from {processed_dir} (Skip: {skip_ratio}, Train: {train_ratio})...")
-    # [FIX #2] RMS-based split; [FIX #3] file_sample_ratio áp dụng cho cả train VÀ val
-    # Test giữ nguyên full để evaluation chính xác (chạy 1 lần, không ảnh hưởng tốc độ training)
-    train_dataset = B02Dataset(processed_dir, lookback, horizon, stride, split='train',
-                               file_sample_ratio=args.file_subset_ratio, train_ratio=train_ratio, skip_ratio=skip_ratio, 
-                               normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
+    print(f"Loading train datasets from {train_dirs}...")
+    train_dataset = MultiBearingDataset(train_dirs, lookback=lookback, horizon=horizon, stride=stride, split='train',
+                                         file_sample_ratio=args.file_subset_ratio, train_ratio=train_ratio, skip_ratio=skip_ratio, 
+                                         normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
     
-    # [FIX] Đồng bộ chuẩn hóa OC giữa các tập dữ liệu
-    oc_stats = getattr(train_dataset, 'oc_stats', None)
+    oc_stats = train_dataset.oc_stats
     
-    val_dataset   = B02Dataset(processed_dir, lookback, horizon, stride, split='val',
-                               file_sample_ratio=args.file_subset_ratio, oc_stats=oc_stats, train_ratio=train_ratio, skip_ratio=skip_ratio, 
-                               normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
-    test_dataset  = B02Dataset(processed_dir, lookback, horizon, stride, split='test',
-                               file_sample_ratio=1, oc_stats=oc_stats, train_ratio=train_ratio, skip_ratio=skip_ratio, 
-                               normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
+    print(f"Loading val datasets from {train_dirs}...")
+    val_dataset   = MultiBearingDataset(train_dirs, lookback=lookback, horizon=horizon, stride=stride, split='val',
+                                         file_sample_ratio=args.file_subset_ratio, oc_stats=oc_stats, train_ratio=train_ratio, skip_ratio=skip_ratio, 
+                                         normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
+    
+    print(f"Loading test datasets from {test_dirs}...")
+    test_dataset  = MultiBearingDataset(test_dirs, lookback=lookback, horizon=horizon, stride=stride, split='test',
+                                         file_sample_ratio=1, oc_stats=oc_stats, train_ratio=train_ratio, skip_ratio=skip_ratio, 
+                                         normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
         
     batch_size = int(config['training'].get('batch_size', 128))
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
