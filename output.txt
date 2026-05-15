@@ -1,0 +1,8 @@
+--- Đang khởi tạo mô hình để kiểm tra tham số ---
+-----------------------------------------------------------------
+Config File     | Model Variant                  | Parameters     
+-----------------------------------------------------------------
+default.yaml    | Hybrid-Mamba (Default)         | 4,491,478
+small.yaml      | Hybrid-Mamba (Small)           | 4,299,126
+tiny.yaml       | Hybrid-Mamba (Tiny)            | 4,245,702
+-----------------------------------------------------------------

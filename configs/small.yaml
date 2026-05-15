@@ -1,4 +1,4 @@
-# default.yaml
+# small.yaml
 
 data:
   raw_dir: "data/raw/B04"
@@ -16,12 +16,12 @@ data:
 model:
   patch_size: 64
   patch_stride: 32
-  trend_downsample: 1       # Baseline: không pooling
-  cnn_out_channels: 64
-  mamba_d_model: 64
-  mamba_n_layer: 4
-  mamba_d_state: 16
-  mamba_d_conv: 4
+  trend_downsample: 4       # Giảm 4 lần tham số trend head
+  cnn_out_channels: 32
+  mamba_d_model: 32
+  mamba_n_layer: 2
+  mamba_d_state: 8
+  mamba_d_conv: 2
   mamba_expand: 2
   bidirectional: false
   decomp_kernel: 25
@@ -33,5 +33,5 @@ training:
   device: "cuda"
 
 logging:
-  project_name: "Hybrid_Mamba_CNN_B04"
+  project_name: "Hybrid_Mamba_CNN_Small"
   use_wandb: false

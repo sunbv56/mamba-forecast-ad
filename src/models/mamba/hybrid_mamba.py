@@ -99,9 +99,14 @@ class HybridMambaCNN(nn.Module):
         )
 
         # ------------------------------------------------------------------
-        # 3b. Trend Branch — simple Linear (DLinear-style)
+        # 3b. Trend Branch — simple Linear (DLinear-style) with optional Pooling
         # ------------------------------------------------------------------
-        self.trend_head = nn.Linear(lookback, forecast_len)
+        self.trend_downsample = model_cfg.get('trend_downsample', 1)
+        if self.trend_downsample > 1:
+            self.trend_pool = nn.AvgPool1d(kernel_size=self.trend_downsample)
+            self.trend_head = nn.Linear(lookback // self.trend_downsample, forecast_len)
+        else:
+            self.trend_head = nn.Linear(lookback, forecast_len)
 
         # ------------------------------------------------------------------
         # 4. Learnable mix weight (α·seasonal + (1-α)·trend per channel)
@@ -123,7 +128,11 @@ class HybridMambaCNN(nn.Module):
         seasonal, trend = self.decomp(x)              # both (B, C, L)
 
         # ── Trend Branch ──────────────────────────────────────────────────
-        trend_out = self.trend_head(trend)             # (B, C, forecast_len)
+        if self.trend_downsample > 1:
+            trend_pooled = self.trend_pool(trend)      # (B, C, L // downsample)
+            trend_out = self.trend_head(trend_pooled)  # (B, C, forecast_len)
+        else:
+            trend_out = self.trend_head(trend)         # (B, C, forecast_len)
 
         # ── Seasonal Branch ───────────────────────────────────────────────
         # Patching: (B, C, L) → (B, C, N, d_model)

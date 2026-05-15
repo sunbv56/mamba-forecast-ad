@@ -66,8 +66,8 @@ class EarlyStopping:
 
 # --- Training and Evaluation Functions ---
 
-def train_one_model(name, model, train_loader, val_loader, test_loader, config, device):
-    print(f"\n>>> Training {name}...")
+def train_one_model(name, model, train_loader, val_loader, test_loader, config, device, config_name="default"):
+    print(f"\n>>> Training {name} (Config: {config_name})...")
     model.to(device)
     
     lr = float(config['training'].get('learning_rate', 0.001))
@@ -82,7 +82,10 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
     # Early Stopping setup
     save_dir = config['training'].get('save_dir', 'results/models')
     os.makedirs(save_dir, exist_ok=True)
-    best_model_path = os.path.join(save_dir, f"{name.lower().replace('-', '_')}_best.pth")
+    
+    # [NEW] Include config name in filename
+    model_slug = name.lower().replace('-', '_')
+    best_model_path = os.path.join(save_dir, f"{model_slug}_{config_name}_best.pth")
     early_stopping = EarlyStopping(patience=3, verbose=True, path=best_model_path)
     
     losses = []
@@ -368,29 +371,34 @@ def main():
     if test_dirs is None:
         test_dirs = [config['data']['processed_dir']]
 
+    window_stride = config['data'].get('window_stride', 1024)
     lookback = config['data'].get('lookback', 4096)
     horizon = config['data'].get('horizon', 1024)
     sampling_rate = config['data'].get('sampling_rate', 128000)
-    patch_size = config['data'].get('patch_size', 2048)
-    stride = config['data'].get('stride', 1024)
+    
+    # Model patching params
+    patch_size = config['model'].get('patch_size', 64)
+    patch_stride = config['model'].get('patch_stride', 32)
+    trend_downsample = config['model'].get('trend_downsample', 1)
+    
     train_ratio = config['data'].get('train_ratio', 0.5)
     skip_ratio = config['data'].get('skip_ratio', 0.1)
     highpass_freq = config['data'].get('highpass_freq', 1000)
     
     print(f"Loading train datasets from {train_dirs}...")
-    train_dataset = MultiBearingDataset(train_dirs, lookback=lookback, horizon=horizon, stride=stride, split='train',
+    train_dataset = MultiBearingDataset(train_dirs, lookback=lookback, horizon=horizon, stride=window_stride, split='train',
                                          file_sample_ratio=args.file_subset_ratio, train_ratio=train_ratio, skip_ratio=skip_ratio, 
                                          normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
     
     oc_stats = train_dataset.oc_stats
     
     print(f"Loading val datasets from {train_dirs}...")
-    val_dataset   = MultiBearingDataset(train_dirs, lookback=lookback, horizon=horizon, stride=stride, split='val',
+    val_dataset   = MultiBearingDataset(train_dirs, lookback=lookback, horizon=horizon, stride=window_stride, split='val',
                                          file_sample_ratio=args.file_subset_ratio, oc_stats=oc_stats, train_ratio=train_ratio, skip_ratio=skip_ratio, 
                                          normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
     
     print(f"Loading test datasets from {test_dirs}...")
-    test_dataset  = MultiBearingDataset(test_dirs, lookback=lookback, horizon=horizon, stride=stride, split='test',
+    test_dataset  = MultiBearingDataset(test_dirs, lookback=lookback, horizon=horizon, stride=window_stride, split='test',
                                          file_sample_ratio=1, oc_stats=oc_stats, train_ratio=train_ratio, skip_ratio=skip_ratio, 
                                          normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
         
@@ -419,14 +427,15 @@ def main():
                 'mamba_expand': config['model'].get('mamba_expand', 2),
                 'forecast_len': horizon, 
                 'patch_size': patch_size, 
-                'stride': stride,
+                'stride': patch_stride,
+                'trend_downsample': trend_downsample,
                 'in_channels': 2, 'lookback': lookback,
                 'decomp_kernel': config['model'].get('decomp_kernel', 25), 
                 'use_multiscale': True,
             },
             'data': {
                 'patch_size': patch_size, 
-                'stride': stride, 
+                'stride': patch_stride, 
                 'lookback': lookback
             }
         }),
@@ -444,10 +453,10 @@ def main():
             in_channels=2,
             lookback=lookback,
             forecast_len=horizon,
-            patch_size=64,
-            stride=32,
-            d_model=64,
-            n_layers=4,
+            patch_size=patch_size,
+            stride=patch_stride,
+            d_model=config['model'].get('mamba_d_model', 64),
+            n_layers=config['model'].get('mamba_n_layer', 4),
             dropout=0.2, # Paper suggested 0.2-0.3
             VPT_mode=1, # Enable Variable-Aware Scanning
             ATSP_solver='SA'
@@ -462,11 +471,14 @@ def main():
         print(f"Error: Model {args.model} not found.")
         sys.exit(1)
         
+    # Extract config name from filename (e.g., 'configs/small.yaml' -> 'small')
+    config_name = os.path.basename(args.config).replace('.yaml', '')
+    
     results = {}
     for name, model in models_to_train.items():
         params = count_parameters(model)
-        print(f"\n>>> Training {name} (Params: {params:,})...")
-        res = train_one_model(name, model, train_loader, val_loader, test_loader, config, device)
+        print(f"\n>>> Training {name} (Params: {params:,}) with Config: {config_name}...")
+        res = train_one_model(name, model, train_loader, val_loader, test_loader, config, device, config_name=config_name)
         results[name] = res
         
     # Final Results Summary

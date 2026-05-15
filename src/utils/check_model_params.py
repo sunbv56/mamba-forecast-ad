@@ -16,17 +16,31 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def main():
-    config_path = os.path.join(project_root, "configs/default.yaml")
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
+    config_files = ["default.yaml", "small.yaml", "tiny.yaml"]
+    results = []
 
-    lookback = config['data'].get('lookback', 4096)
-    horizon = config['data'].get('horizon', 1024)
-    patch_size = config['data'].get('patch_size', 2048)
-    stride = config['data'].get('stride', 1024)
+    for config_file in config_files:
+        config_path = os.path.join(project_root, "configs", config_file)
+        if not os.path.exists(config_path):
+            print(f"Bỏ qua {config_file}: File không tồn tại.")
+            continue
+            
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
 
-    models = {
-        "Hybrid-Mamba-V1": HybridMambaCNN({
+        window_stride = config['data'].get('window_stride', 1024)
+        lookback = config['data'].get('lookback', 4096)
+        horizon = config['data'].get('horizon', 1024)
+        
+        # Model patching & trend params
+        patch_size = config['model'].get('patch_size', 64)
+        patch_stride = config['model'].get('patch_stride', 32)
+        trend_downsample = config['model'].get('trend_downsample', 1)
+
+        model_name = config_file.replace(".yaml", "").capitalize()
+        
+        # 1. Initialize Hybrid-Mamba-V1
+        hybrid_model = HybridMambaCNN({
             'model': {
                 'mamba_version': 1,
                 'mamba_d_model': config['model'].get('mamba_d_model', 64),
@@ -36,32 +50,45 @@ def main():
                 'mamba_expand': config['model'].get('mamba_expand', 2),
                 'forecast_len': horizon,
                 'patch_size': patch_size,
-                'stride': stride,
+                'stride': patch_stride,
+                'trend_downsample': trend_downsample,
                 'in_channels': 2,
                 'lookback': lookback,
                 'decomp_kernel': config['model'].get('decomp_kernel', 25),
                 'use_multiscale': True,
             },
-            'data': {'patch_size': patch_size, 'stride': stride, 'lookback': lookback}
-        }),
-        "MambaTS-Official": MambaTSOfficial(MambaTSConfig(
+            'data': {'patch_size': patch_size, 'stride': patch_stride, 'lookback': lookback}
+        })
+        
+        results.append({
+            "Config": config_file,
+            "Model": f"Hybrid-Mamba ({model_name})",
+            "Params": count_parameters(hybrid_model)
+        })
+
+        # 2. Initialize MambaTS-Official
+        mambats_model = MambaTSOfficial(MambaTSConfig(
             in_channels=2,
             lookback=lookback,
             forecast_len=horizon,
-            patch_size=64,
-            stride=32,
+            patch_size=patch_size,
+            stride=patch_stride,
             d_model=config['model'].get('mamba_d_model', 64),
             n_layers=config['model'].get('mamba_n_layer', 4)
         ))
-    }
 
-    print("-" * 50)
-    print(f"{'Model Name':<25} | {'Parameters':<15}")
-    print("-" * 50)
-    for name, model in models.items():
-        params = count_parameters(model)
-        print(f"{name:<25} | {params:,}")
-    print("-" * 50)
+        results.append({
+            "Config": config_file,
+            "Model": f"MambaTS-Official ({model_name})",
+            "Params": count_parameters(mambats_model)
+        })
+
+    print("-" * 75)
+    print(f"{'Config File':<15} | {'Model Variant':<35} | {'Parameters':<15}")
+    print("-" * 75)
+    for res in results:
+        print(f"{res['Config']:<15} | {res['Model']:<35} | {res['Params']:,}")
+    print("-" * 75)
 
 if __name__ == "__main__":
     main()
