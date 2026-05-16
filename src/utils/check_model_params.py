@@ -16,7 +16,7 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def main():
-    config_files = ["default.yaml", "small.yaml", "tiny.yaml"]
+    config_files = ["default.yaml", "small.yaml", "tiny.yaml", "nano.yaml", "expanded.yaml"]
     results = []
 
     for config_file in config_files:

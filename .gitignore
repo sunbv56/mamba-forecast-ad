@@ -188,3 +188,7 @@ tmp_project/
 academic_research_skills/
 karpathy_skills/
 *skills/
+
+# Internal Reports and Diaries
+reports/
+*.pdf

@@ -1,0 +1,37 @@
+# expanded.yaml - Long context window configuration
+
+data:
+  raw_dir: "data/raw/B04"
+  processed_dir: "data/processed/B04"
+  train_datasets: ["data/processed/B02", "data/processed/B05"]
+  test_datasets: ["data/processed/B01", "data/processed/B03", "data/processed/B04"]
+  sampling_rate: 128000
+  highpass_freq: 2000
+  window_stride: 2048       # Tăng bước nhảy để tránh quá nhiều mẫu khi window dài
+  lookback: 16384           # Mở rộng context window (Gấp 4 lần)
+  horizon: 1024
+  skip_ratio: 0.1           # Bỏ qua nhiều hơn để huấn luyện nhanh
+  train_ratio: 0.5
+
+model:
+  patch_size: 128           # Tăng patch size cho chuỗi dài
+  patch_stride: 64
+  trend_downsample: 8
+  cnn_out_channels: 16
+  mamba_d_model: 16
+  mamba_n_layer: 1          # Giữ layer thấp để kiểm soát bộ nhớ khi context dài
+  mamba_d_state: 8
+  mamba_d_conv: 4
+  mamba_expand: 2
+  bidirectional: false
+  decomp_kernel: 49          # Tăng kernel size cho decomp chuỗi dài
+
+training:
+  batch_size: 32            # Giảm batch size để tránh OOM khi lookback lớn
+  learning_rate: 5e-4
+  epochs: 10
+  device: "cuda"
+
+logging:
+  project_name: "Hybrid_Mamba_CNN_Expanded"
+  use_wandb: false

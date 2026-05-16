@@ -1,0 +1,37 @@
+# nano.yaml - Ultra-lightweight configuration
+
+data:
+  raw_dir: "data/raw/B04"
+  processed_dir: "data/processed/B04"
+  train_datasets: ["data/processed/B02", "data/processed/B05"]
+  test_datasets: ["data/processed/B01", "data/processed/B03", "data/processed/B04"]
+  sampling_rate: 128000
+  highpass_freq: 2000
+  window_stride: 1024
+  lookback: 4096
+  horizon: 1024
+  skip_ratio: 0.05
+  train_ratio: 0.5
+
+model:
+  patch_size: 64
+  patch_stride: 32
+  trend_downsample: 16      # Giảm mạnh tham số trend head
+  cnn_out_channels: 8       # Nano scaling
+  mamba_d_model: 8          # Nano scaling
+  mamba_n_layer: 1          # Giảm số lớp xuống tối thiểu
+  mamba_d_state: 4
+  mamba_d_conv: 2
+  mamba_expand: 2
+  bidirectional: false
+  decomp_kernel: 25
+
+training:
+  batch_size: 128
+  learning_rate: 5e-4
+  epochs: 10                # Thử nghiệm nhanh cho nano
+  device: "cuda"
+
+logging:
+  project_name: "Hybrid_Mamba_CNN_Nano"
+  use_wandb: false
