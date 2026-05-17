@@ -1,0 +1,53 @@
+# nano.yaml - Ultra-lightweight configuration
+
+data:
+  raw_dir: "data/raw/ieee-phm-2012-data-challenge-dataset-master"
+  processed_dir: "data/processed"
+  train_datasets: ["data/processed/PRONOSTIA_Bearing1_1",
+                   "data/processed/PRONOSTIA_Bearing1_2", 
+                   "data/processed/PRONOSTIA_Bearing2_1", 
+                   "data/processed/PRONOSTIA_Bearing2_2", 
+                   "data/processed/PRONOSTIA_Bearing3_1", 
+                   "data/processed/PRONOSTIA_Bearing3_2"]
+  test_datasets: [  "data/processed/PRONOSTIA_Bearing1_3",
+                    "data/processed/PRONOSTIA_Bearing1_4",
+                    "data/processed/PRONOSTIA_Bearing1_5",
+                    "data/processed/PRONOSTIA_Bearing1_6",
+                    "data/processed/PRONOSTIA_Bearing1_7",
+                    "data/processed/PRONOSTIA_Bearing2_3",
+                    "data/processed/PRONOSTIA_Bearing2_4",
+                    "data/processed/PRONOSTIA_Bearing2_5",
+                    "data/processed/PRONOSTIA_Bearing2_6",
+                    "data/processed/PRONOSTIA_Bearing2_7",
+                    "data/processed/PRONOSTIA_Bearing3_3"]
+  sampling_rate: 25600
+  highpass_freq: 2000
+  label_strategy: 'rms'
+  window_stride: 512
+  lookback: 1536
+  horizon: 512
+  skip_ratio: 0.05
+  train_ratio: 0.5
+
+model:
+  patch_size: 64
+  patch_stride: 32
+  trend_downsample: 4       # Giảm 4 lần tham số trend head
+  cnn_out_channels: 32
+  mamba_d_model: 32
+  mamba_n_layer: 2
+  mamba_d_state: 8
+  mamba_d_conv: 2
+  mamba_expand: 2
+  bidirectional: false
+  decomp_kernel: 25
+
+training:
+  batch_size: 128
+  learning_rate: 5e-4
+  epochs: 10                # Thử nghiệm nhanh cho nano
+  device: "cuda"
+
+logging:
+  project_name: "Hybrid_Mamba_CNN_Nano_PRONOSTIA"
+  use_wandb: false

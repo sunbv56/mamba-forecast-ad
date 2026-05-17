@@ -31,6 +31,9 @@ def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 from src.evaluation.metrics import calculate_threshold_3sigma, calculate_threshold_robust, calculate_threshold_percentile, calculate_threshold_gmm, find_best_threshold, calculate_metrics, calculate_threshold_pot
 
+# --- Configuration Flags ---
+USE_OPERATING_CONDITIONS = True  # Đặt thành True để bật Operating Conditions (Speed, Load) - hỗ trợ Multi-Dataset Generalization
+
 class EarlyStopping:
     def __init__(self, patience=3, verbose=False, delta=0, path='checkpoint.pt'):
         self.patience = patience
@@ -98,7 +101,7 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         for batch in pbar:
             x, y = batch[0].to(device), batch[1].to(device)
             stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
-            oc = batch[4].to(device) if len(batch) > 4 else None
+            oc = batch[4].to(device) if len(batch) > 4 and USE_OPERATING_CONDITIONS else None
             
             optimizer.zero_grad()
             with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
@@ -151,7 +154,7 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
             for batch in val_loader:
                 x, y = batch[0].to(device), batch[1].to(device)
                 stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
-                oc = batch[4].to(device) if len(batch) > 4 else None
+                oc = batch[4].to(device) if len(batch) > 4 and USE_OPERATING_CONDITIONS else None
                 
                 with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
                     if stats is not None and isinstance(model, HybridMambaCNN):
@@ -188,7 +191,7 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         for batch in train_loader:
             x, y = batch[0].to(device), batch[1].to(device)
             stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
-            oc = batch[4].to(device) if len(batch) > 4 else None
+            oc = batch[4].to(device) if len(batch) > 4 and USE_OPERATING_CONDITIONS else None
             
             if stats is not None and isinstance(model, HybridMambaCNN):
                 y_pred = model(x, stats)
@@ -205,55 +208,6 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
     threshold_pc  = calculate_threshold_percentile(train_scores_sample, q=99.7)
     threshold_pot = calculate_threshold_pot(train_scores_sample, q=1e-3)
 
-    # --- [FIX #1] Evaluation on Test Set — thu thập actual labels từ dataset ---
-    print(f"Evaluating {name} on Test Set...")
-    test_scores   = []
-    test_labels   = []   # [FIX #1] actual window-level labels
-    test_latencies = []
-    model.eval()
-    with torch.no_grad():
-        for batch in test_loader:
-            x, y = batch[0].to(device), batch[1].to(device)
-            stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
-            oc = batch[4].to(device) if len(batch) > 4 else None
-
-            start_inf = time.time()
-            if stats is not None and isinstance(model, HybridMambaCNN):
-                y_pred = model(x, stats)
-            elif oc is not None and isinstance(model, MambaTSOfficial):
-                y_pred = model(x, oc)
-            else:
-                y_pred = model(x)
-            test_latencies.append((time.time() - start_inf) / x.size(0))
-
-            scores = calculate_anomaly_score(y, y_pred, metric='mse', normalized=False)
-            test_scores.extend(scores.tolist())
-
-            # batch[3] = window-level label (int 0/1) từ BearingDataset
-            if len(batch) > 3:
-                labels_batch = batch[3]
-                if hasattr(labels_batch, 'numpy'):
-                    test_labels.extend(labels_batch.numpy().tolist())
-                else:
-                    test_labels.extend([int(l) for l in labels_batch])
-            else:
-                test_labels.extend([0] * x.size(0))  # fallback
-
-    test_scores      = np.array(test_scores)
-    test_labels      = np.array(test_labels, dtype=int)
-    test_latency_avg = np.mean(test_latencies) * 1000
-
-    n_fault = int(test_labels.sum())
-    n_total = len(test_labels)
-    print(f"  Test label distribution: {n_fault}/{n_total} anomaly windows ({n_fault/n_total:.1%})")
-
-    # GMM cần cả healthy và anomaly scores để fit 2 cụm
-    combined_for_gmm = np.concatenate([train_scores_sample, test_scores])
-    threshold_gmm = calculate_threshold_gmm(combined_for_gmm)
-
-    # [FIX #1] Optimal threshold: tìm trên test set với actual labels
-    threshold_opt, _ = find_best_threshold(test_scores, test_labels)
-
     # --- 2. Evaluation on 4000 Random Train Samples (Healthy Check) ---
     print(f"\n>>> EVALUATION ON TRAIN (4000 random healthy samples)...")
     random_train_scores = []
@@ -266,15 +220,16 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         for batch in temp_loader:
             x, y = batch[0].to(device), batch[1].to(device)
             stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
-            oc = batch[4].to(device) if len(batch) > 4 else None
+            oc = batch[4].to(device) if len(batch) > 4 and USE_OPERATING_CONDITIONS else None
             
             start_inf = time.time()
-            if stats is not None and isinstance(model, HybridMambaCNN):
-                y_pred = model(x, stats)
-            elif oc is not None and isinstance(model, MambaTSOfficial):
-                y_pred = model(x, oc)
-            else:
-                y_pred = model(x)
+            with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
+                if stats is not None and isinstance(model, HybridMambaCNN):
+                    y_pred = model(x, stats)
+                elif oc is not None and isinstance(model, MambaTSOfficial):
+                    y_pred = model(x, oc)
+                else:
+                    y_pred = model(x)
             train_inf_latencies.append((time.time() - start_inf) / x.size(0))
             scores = calculate_anomaly_score(y, y_pred, metric='mse', normalized=False)
             random_train_scores.extend(scores.tolist())
@@ -283,43 +238,134 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
     rt_labels = np.zeros(len(rt_scores)).astype(int)
     train_latency_avg = np.mean(train_inf_latencies) * 1000
     
-    for t_name, t_val in [("3-Sigma", threshold_3s), ("Robust", threshold_rb), ("Percentile", threshold_pc), ("POT", threshold_pot), ("Self-Learn", threshold_gmm), ("Optimal", threshold_opt)]:
+    for t_name, t_val in [("3-Sigma", threshold_3s), ("Robust", threshold_rb), ("Percentile", threshold_pc), ("POT", threshold_pot)]:
         m = calculate_metrics(rt_scores, rt_labels, t_val)
         det_rate = np.sum(rt_scores > t_val) / len(rt_scores)
         print(f"   [{t_name:<10}] > F1: {m.get('F1', 0):.4f} | FAR: {m.get('FAR', 0):.4f} | Det Rate: {det_rate:.2%} | Thresh: {t_val:.6f}")
     print(f"   > Avg Latency: {train_latency_avg:.4f} ms/sample")
 
-    # --- [FIX #1] Evaluation on Test Set — dùng actual labels ---
-    print(f"\n>>> EVALUATION ON TEST (Anomaly Detection Performance)...")
-    if len(np.unique(test_labels)) > 1:
-        precision_path, recall_path, _ = precision_recall_curve(test_labels, test_scores)
-        auprc = auc_score_func(recall_path, precision_path)
-    else:
-        auprc = 0.0
-        print("  [WARN] Test set contains only one class — AUPRC undefined.")
+    # --- [FIX #1] Evaluation on Test Set — Đánh giá độc lập từng vòng bi (Per-bearing) ---
+    print(f"\n>>> EVALUATION ON TEST (Per-Bearing Anomaly Detection Performance)...")
+    
+    macro_metrics = {
+        t_name: {"F1": [], "FAR": [], "AUC": [], "AUPRC": []} 
+        for t_name in ["3-Sigma", "Robust", "Percentile", "POT", "Self-Learn", "Optimal"]
+    }
+    
+    total_test_latencies = []
+    skip_ratio = config['data'].get('skip_ratio', 0.1)
+    train_ratio = config['data'].get('train_ratio', 0.5)
 
-    for t_name, t_val in [("3-Sigma", threshold_3s), ("Robust", threshold_rb), ("Percentile", threshold_pc),
-                          ("POT", threshold_pot), ("Self-Learn", threshold_gmm), ("Optimal", threshold_opt)]:
-        m = calculate_metrics(test_scores, test_labels, t_val)
-        det_rate = np.sum(test_scores > t_val) / len(test_scores)
-        print(f"   [{t_name:<10}] > F1: {m.get('F1', 0):.4f} | FAR: {m.get('FAR', 0):.4f} | Det Rate: {det_rate:.2%} | Thresh: {t_val:.6f}")
-    print(f"   > AUPRC: {auprc:.4f} | Avg Latency: {test_latency_avg:.4f} ms/sample")
+    test_datasets = test_loader.dataset.datasets if hasattr(test_loader.dataset, 'datasets') else [test_loader.dataset]
+
+    model.eval()
+    for test_idx, ds in enumerate(test_datasets):
+        bearing_name = os.path.basename(ds.data_dir) if hasattr(ds, 'data_dir') else f"Dataset_{test_idx}"
+        
+        # Tạo temp loader cho 1 vòng bi duy nhất
+        loader = DataLoader(ds, batch_size=config['training'].get('batch_size', 128), shuffle=False)
+        
+        bearing_scores = []
+        bearing_labels = []
+        
+        with torch.no_grad():
+            for batch in loader:
+                x, y = batch[0].to(device), batch[1].to(device)
+                stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
+                oc = batch[4].to(device) if len(batch) > 4 and USE_OPERATING_CONDITIONS else None
+
+                start_inf = time.time()
+                with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
+                    if stats is not None and isinstance(model, HybridMambaCNN):
+                        y_pred = model(x, stats)
+                    elif oc is not None and isinstance(model, MambaTSOfficial):
+                        y_pred = model(x, oc)
+                    else:
+                        y_pred = model(x)
+                
+                total_test_latencies.append((time.time() - start_inf) / x.size(0))
+                
+                scores = calculate_anomaly_score(y, y_pred, metric='mse', normalized=False)
+                bearing_scores.extend(scores.tolist())
+
+                if len(batch) > 3:
+                    labels_batch = batch[3]
+                    if hasattr(labels_batch, 'numpy'):
+                        bearing_labels.extend(labels_batch.numpy().tolist())
+                    else:
+                        bearing_labels.extend([int(l) for l in labels_batch])
+                else:
+                    bearing_labels.extend([0] * x.size(0))
+
+        bearing_scores = np.array(bearing_scores)
+        bearing_labels = np.array(bearing_labels, dtype=int)
+        
+        n_fault = int(bearing_labels.sum())
+        n_total = len(bearing_labels)
+        print(f"\n  [{bearing_name}] Label distribution: {n_fault}/{n_total} anomaly windows ({n_fault/n_total:.1%})")
+
+        # Tính LOCAL THRESHOLD (Self-learning)
+        skip_end = int(n_total * skip_ratio)
+        train_end = int(n_total * (skip_ratio + train_ratio))
+        if train_end > skip_end:
+            healthy_scores = bearing_scores[skip_end:train_end]
+        else:
+            healthy_scores = bearing_scores[:max(1, int(n_total * 0.1))] # Fallback 10%
+            
+        local_th_3s  = calculate_threshold_3sigma(healthy_scores)
+        local_th_rb  = calculate_threshold_robust(healthy_scores)
+        local_th_pc  = calculate_threshold_percentile(healthy_scores, q=99.7)
+        local_th_pot = calculate_threshold_pot(healthy_scores, q=1e-3)
+        local_th_gmm = calculate_threshold_gmm(bearing_scores)
+        local_th_opt, _ = find_best_threshold(bearing_scores, bearing_labels)
+
+        # AUPRC cho riêng vòng bi
+        if len(np.unique(bearing_labels)) > 1:
+            precision_path, recall_path, _ = precision_recall_curve(bearing_labels, bearing_scores)
+            bearing_auprc = auc_score_func(recall_path, precision_path)
+        else:
+            bearing_auprc = 0.0
+
+        thresholds = [
+            ("3-Sigma", local_th_3s), ("Robust", local_th_rb), ("Percentile", local_th_pc),
+            ("POT", local_th_pot), ("Self-Learn", local_th_gmm), ("Optimal", local_th_opt)
+        ]
+        
+        for t_name, t_val in thresholds:
+            m = calculate_metrics(bearing_scores, bearing_labels, t_val)
+            macro_metrics[t_name]["F1"].append(m.get('F1', 0))
+            macro_metrics[t_name]["FAR"].append(m.get('FAR', 0))
+            macro_metrics[t_name]["AUC"].append(m.get('AUC', 0))
+            macro_metrics[t_name]["AUPRC"].append(bearing_auprc)
+            
+            # In log tóm tắt cho từng vòng bi
+            if t_name in ["Robust", "POT", "Optimal"]:
+                print(f"     - {t_name:<7}: F1={m.get('F1',0):.4f} | FAR={m.get('FAR',0):.4f} | Thresh={t_val:.4f}")
+
+    test_latency_avg = np.mean(total_test_latencies) * 1000
+
+    print(f"\n============================================================")
+    print(f">>> MACRO-AVERAGE PERFORMANCE ({len(test_datasets)} Bearings)")
+    for t_name in macro_metrics.keys():
+        avg_f1 = np.mean(macro_metrics[t_name]["F1"])
+        avg_far = np.mean(macro_metrics[t_name]["FAR"])
+        avg_auc = np.mean(macro_metrics[t_name]["AUC"])
+        avg_auprc = np.mean(macro_metrics[t_name]["AUPRC"])
+        print(f"   [{t_name:<10}] > F1: {avg_f1:.4f} | FAR: {avg_far:.4f} | AUC: {avg_auc:.4f} | AUPRC: {avg_auprc:.4f}")
+    print(f"   > Avg Latency: {test_latency_avg:.4f} ms/sample")
+    print(f"============================================================")
 
     print(f"\n✅ {name} Finished!")
 
-    # Save results (using Robust for summary) — actual labels
-    m_rb_final  = calculate_metrics(test_scores, test_labels, threshold_rb)
-    m_3s_final  = calculate_metrics(test_scores, test_labels, threshold_3s)
-    m_pot_final = calculate_metrics(test_scores, test_labels, threshold_pot)
-    
+    # Save results (using Macro-average Robust for summary)
     result = {
         'name': name,
-        'f1_3s': float(m_3s_final.get('F1', 0)),
-        'f1_rb': float(m_rb_final.get('F1', 0)),
-        'f1_pot': float(m_pot_final.get('F1', 0)),
-        'auc': float(m_rb_final.get('AUC', 0)),
-        'far_rb': float(m_rb_final.get('FAR', 0)),
-        'auprc': float(auprc),
+        'f1_3s': float(np.mean(macro_metrics["3-Sigma"]["F1"])),
+        'f1_rb': float(np.mean(macro_metrics["Robust"]["F1"])),
+        'f1_pot': float(np.mean(macro_metrics["POT"]["F1"])),
+        'auc': float(np.mean(macro_metrics["Robust"]["AUC"])),
+        'far_rb': float(np.mean(macro_metrics["Robust"]["FAR"])),
+        'auprc': float(np.mean(macro_metrics["Robust"]["AUPRC"])),
         'latency': float(test_latency_avg),
         'train_duration': float(train_duration)
     }
@@ -384,23 +430,24 @@ def main():
     train_ratio = config['data'].get('train_ratio', 0.5)
     skip_ratio = config['data'].get('skip_ratio', 0.1)
     highpass_freq = config['data'].get('highpass_freq', 1000)
+    label_strategy = config['data'].get('label_strategy', 'rms')
     
     print(f"Loading train datasets from {train_dirs}...")
     train_dataset = MultiBearingDataset(train_dirs, lookback=lookback, horizon=horizon, stride=window_stride, split='train',
                                          file_sample_ratio=args.file_subset_ratio, train_ratio=train_ratio, skip_ratio=skip_ratio, 
-                                         normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
+                                         normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate, label_strategy=label_strategy)
     
     oc_stats = train_dataset.oc_stats
     
     print(f"Loading val datasets from {train_dirs}...")
     val_dataset   = MultiBearingDataset(train_dirs, lookback=lookback, horizon=horizon, stride=window_stride, split='val',
                                          file_sample_ratio=args.file_subset_ratio, oc_stats=oc_stats, train_ratio=train_ratio, skip_ratio=skip_ratio, 
-                                         normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
+                                         normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate, label_strategy=label_strategy)
     
     print(f"Loading test datasets from {test_dirs}...")
     test_dataset  = MultiBearingDataset(test_dirs, lookback=lookback, horizon=horizon, stride=window_stride, split='test',
                                          file_sample_ratio=1, oc_stats=oc_stats, train_ratio=train_ratio, skip_ratio=skip_ratio, 
-                                         normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate)
+                                         normalize=False, highpass_freq=highpass_freq, sampling_rate=sampling_rate, label_strategy=label_strategy)
         
     batch_size = int(config['training'].get('batch_size', 128))
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -459,7 +506,8 @@ def main():
             n_layers=config['model'].get('mamba_n_layer', 4),
             dropout=0.2, # Paper suggested 0.2-0.3
             VPT_mode=1, # Enable Variable-Aware Scanning
-            ATSP_solver='SA'
+            ATSP_solver='SA',
+            oc_dim=2
         )),
     }
     

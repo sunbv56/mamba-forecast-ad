@@ -7,6 +7,7 @@ data:
   test_datasets: ["data/processed/B01", "data/processed/B03", "data/processed/B04"]
   sampling_rate: 128000
   highpass_freq: 2000
+  use_hybrid_labels: false
   window_stride: 2048       # Tăng bước nhảy để tránh quá nhiều mẫu khi window dài
   lookback: 16384           # Mở rộng context window (Gấp 4 lần)
   horizon: 1024

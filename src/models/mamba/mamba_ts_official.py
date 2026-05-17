@@ -22,8 +22,10 @@ class MambaTSConfig:
                  VPT_mode: int = 1, # 1 for Variable-Aware Scanning
                  ATSP_solver: str = 'SA', # 'SA' (Simulated Annealing)
                  ssm_cfg: dict = None,
-                 use_casual_conv: bool = False):
+                 use_casual_conv: bool = False,
+                 oc_dim: int = 2):
         self.task_name = 'forecasting'
+        self.oc_dim = oc_dim
         self.enc_in = in_channels
         self.seq_len = lookback
         self.pred_len = forecast_len
@@ -92,8 +94,9 @@ class MambaTSOfficial(nn.Module):
         self.head = PredictionHead(configs.d_model * num_patches, configs.pred_len)
 
         # 5. Operating Conditions Embedding (Optional)
-        # B02 has 6 OC features: setDynLoad, peak_dynLoad, setStatLoad, meanAbs_statLoad, setSpeed, meanAbs_speed
-        self.oc_embedding = nn.Linear(6, configs.d_model)
+        # Đồng nhất hóa: sử dụng 2 features (Speed, Load) thay vì 6
+        self.oc_dim = getattr(configs, 'oc_dim', 2)
+        self.oc_embedding = nn.Linear(self.oc_dim, configs.d_model)
 
     def forward(self, x: torch.Tensor, oc: Optional[torch.Tensor] = None) -> torch.Tensor:
         """

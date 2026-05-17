@@ -24,7 +24,9 @@ class BearingDataset(Dataset):
         train_ratio=0.5,
         skip_ratio=0.1,
         highpass_freq=0,
-        sampling_rate=128000
+        sampling_rate=128000,
+        label_strategy='rms',
+        **kwargs
     ):
         """
         DataLoader cho bộ dữ liệu vòng bi. Trả về cặp (X, Y, stats, label) để Forecasting + AD.
@@ -44,6 +46,7 @@ class BearingDataset(Dataset):
         self.skip_ratio      = skip_ratio
         self.highpass_freq   = highpass_freq
         self.sampling_rate   = sampling_rate
+        self.label_strategy  = label_strategy
 
         if not os.path.exists(data_dir):
             raise FileNotFoundError(f"Data directory not found: {data_dir}")
@@ -51,11 +54,20 @@ class BearingDataset(Dataset):
         self.files = sorted([f for f in os.listdir(data_dir) if f.endswith('.pt')])
         
         oc_path = os.path.join(data_dir, 'operating_conditions.csv')
+        is_pronostia = 'pronostia' in data_dir.lower() or 'phm' in data_dir.lower()
+        
         if os.path.exists(oc_path):
             self.oc_df = pd.read_csv(oc_path)
             
-            # [NEW] Chuẩn hóa OC (Operating Conditions) thống nhất
-            oc_cols = self.oc_df.columns[1:] # Bỏ cột Time
+            # [NEW] Chuẩn hóa OC: Chỉ trích xuất cột Speed và Load
+            speed_col = next((c for c in self.oc_df.columns if 'setspeed' in c.lower()), None)
+            load_col = next((c for c in self.oc_df.columns if 'setdynload' in c.lower()), None)
+            
+            if speed_col and load_col:
+                oc_cols = [speed_col, load_col]
+            else:
+                oc_cols = self.oc_df.columns[1:3] # Fallback
+                
             oc_values = self.oc_df[oc_cols].values
             
             if self.oc_stats is None:
@@ -65,9 +77,24 @@ class BearingDataset(Dataset):
                     'std': oc_values.std(axis=0) + 1e-6
                 }
             
-            self.oc_df[oc_cols] = (oc_values - self.oc_stats['mean']) / self.oc_stats['std']
+            self.oc_values_processed = (oc_values - self.oc_stats['mean']) / self.oc_stats['std']
+        elif is_pronostia:
+            self.oc_df = None
+            oc_values = np.array([[1800.0, 4000.0]]) # Hardcode cho PRONOSTIA (1 sample)
+            
+            if self.oc_stats is None:
+                self.oc_stats = {
+                    'mean': oc_values.mean(axis=0),
+                    'std': oc_values.std(axis=0) + 1e-6
+                }
+                
+            static_oc = (np.array([1800.0, 4000.0]) - self.oc_stats['mean']) / self.oc_stats['std']
+            self.static_oc = static_oc.astype('float32')
+            self.oc_values_processed = None
         else:
             self.oc_df = None
+            self.oc_values_processed = None
+            self.static_oc = None
 
         # Load hoặc compute per-file RMS (cached)
         self.file_rms = self._load_or_compute_file_rms()
@@ -79,7 +106,15 @@ class BearingDataset(Dataset):
         
         healthy_files_for_baseline = self.files[skip_end:train_end]
         all_rms = np.array([self.file_rms[f] for f in healthy_files_for_baseline])
-        self.healthy_rms_baseline = float(np.percentile(all_rms, 10)) if len(all_rms) > 0 else 0.01
+        
+        if len(all_rms) > 0:
+            self.healthy_rms_mean = float(np.mean(all_rms))
+            self.healthy_rms_std = float(np.std(all_rms))
+            self.healthy_rms_baseline = float(np.percentile(all_rms, 10))
+        else:
+            self.healthy_rms_mean = 0.01
+            self.healthy_rms_std = 0.001
+            self.healthy_rms_baseline = 0.01
 
         self.samples = []
         self.signal_cache = {}
@@ -90,7 +125,11 @@ class BearingDataset(Dataset):
         rms_cache_path = os.path.join(self.data_dir, 'file_rms.json')
         if os.path.exists(rms_cache_path):
             with open(rms_cache_path, 'r') as f:
-                return json.load(f)
+                file_rms = json.load(f)
+            # Kiểm tra xem cache có chứa đủ tất cả các file không (tránh lỗi KeyError nếu dataset vừa được cập nhật thêm)
+            if all(fname in file_rms for fname in self.files):
+                return file_rms
+            print(f"file_rms.json thiếu dữ liệu tại {os.path.basename(self.data_dir)}. Đang tính toán lại...")
 
         print(f"Computing per-file RMS for {os.path.basename(self.data_dir)}...")
         file_rms = {}
@@ -130,7 +169,10 @@ class BearingDataset(Dataset):
         n_samples_per_file = sample_data.shape[1]
 
         window_size      = self.lookback + self.horizon
-        n_windows_per_file = (n_samples_per_file - window_size) // self.stride + 1
+        if n_samples_per_file < window_size:
+            n_windows_per_file = 1
+        else:
+            n_windows_per_file = (n_samples_per_file - window_size) // self.stride + 1
 
         n_files = len(self.files)
         skip_end  = int(n_files * self.skip_ratio)
@@ -176,6 +218,12 @@ class BearingDataset(Dataset):
             self.signal_cache[f_idx] = sig
 
         signal = self.signal_cache[f_idx]
+        
+        # PADDING LOGIC cho các file ngắn hơn yêu cầu (ví dụ: PRONOSTIA 2560 < 5120)
+        L = signal.shape[-1]
+        if self.lookback + self.horizon > L:
+            padding = self.lookback + self.horizon - L
+            signal = torch.nn.functional.pad(signal, (0, padding), 'constant', 0)
 
         end_x = offset + self.lookback
         end_y = end_x + self.horizon
@@ -187,10 +235,13 @@ class BearingDataset(Dataset):
         x = x_raw.clone()
 
         current_file_rms = self.file_rms[self.files[f_idx]]
-        if current_file_rms > self.healthy_rms_baseline * self.fault_rms_factor:
-            label = 1
+        
+        if self.label_strategy == '3sigma':
+            threshold = self.healthy_rms_mean + 3.0 * self.healthy_rms_std
+            label = 1 if current_file_rms > threshold else 0
         else:
-            label = 0
+            threshold = self.healthy_rms_baseline * self.fault_rms_factor
+            label = 1 if current_file_rms > threshold else 0
 
         if self.normalize:
             mean_x = x.mean(dim=1, keepdim=True)
@@ -198,9 +249,11 @@ class BearingDataset(Dataset):
             x = (x - mean_x) / std_x
             y = (y - mean_x) / std_x
 
-        if self.oc_df is not None:
-            oc = self.oc_df.iloc[f_idx].values[1:].astype('float32')
-            oc = torch.from_numpy(oc)
+        if hasattr(self, 'oc_values_processed') and self.oc_values_processed is not None:
+            oc = torch.from_numpy(self.oc_values_processed[f_idx].astype('float32'))
+            return x, y, stats, label, oc
+        elif hasattr(self, 'static_oc') and self.static_oc is not None:
+            oc = torch.from_numpy(self.static_oc)
             return x, y, stats, label, oc
 
         return x, y, stats, label

@@ -53,7 +53,7 @@ class HybridMambaCNN(nn.Module):
         # ------------------------------------------------------------------
         # 1. RevIN — học được affine per-channel
         # ------------------------------------------------------------------
-        self.revin = RevIN(num_features=in_channels, affine=True)
+        self.revin = RevIN(num_features=in_channels, affine=False)
 
         # ------------------------------------------------------------------
         # 2. Series Decomposition

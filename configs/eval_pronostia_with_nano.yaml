@@ -1,0 +1,45 @@
+# eval_pronostia_with_nano.yaml - Config để đánh giá model IMS (nano.yaml) trên tập test PRONOSTIA
+
+data:
+  raw_dir: "data/raw/ieee-phm-2012-data-challenge-dataset-master"
+  processed_dir: "data/processed"
+  train_datasets: ["data/processed/PRONOSTIA_Bearing1_1", "data/processed/PRONOSTIA_Bearing1_2"]
+  test_datasets: [  "data/processed/PRONOSTIA_Bearing1_3",
+                    "data/processed/PRONOSTIA_Bearing1_4",
+                    "data/processed/PRONOSTIA_Bearing1_5",
+                    "data/processed/PRONOSTIA_Bearing1_6",
+                    "data/processed/PRONOSTIA_Bearing1_7",
+                    "data/processed/PRONOSTIA_Bearing2_3",
+                    "data/processed/PRONOSTIA_Bearing2_4",
+                    "data/processed/PRONOSTIA_Bearing2_5",
+                    "data/processed/PRONOSTIA_Bearing2_6",
+                    "data/processed/PRONOSTIA_Bearing2_7",
+                    "data/processed/PRONOSTIA_Bearing3_3"]
+  sampling_rate: 25600
+  highpass_freq: 2000
+  label_strategy: '3sigma'
+  
+  # GIỮ NGUYÊN lookback và horizon CỦA nano.yaml ĐỂ KHÔNG BỊ LỆCH TẠ
+  window_stride: 1024
+  lookback: 4096
+  horizon: 1024
+  skip_ratio: 0.05
+  train_ratio: 0.5
+
+model:
+  # GIỮ NGUYÊN CẤU TRÚC MẠNG CỦA nano.yaml
+  patch_size: 64
+  patch_stride: 32
+  trend_downsample: 16      
+  cnn_out_channels: 8       
+  mamba_d_model: 8          
+  mamba_n_layer: 1          
+  mamba_d_state: 4
+  mamba_d_conv: 2
+  mamba_expand: 2
+  bidirectional: false
+  decomp_kernel: 25
+
+training:
+  batch_size: 128
+  device: "cuda"
