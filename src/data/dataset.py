@@ -99,6 +99,11 @@ class BearingDataset(Dataset):
         # Load hoặc compute per-file RMS (cached)
         self.file_rms = self._load_or_compute_file_rms()
 
+        # [NEW] Làm mịn RMS bằng Rolling Mean (window=10) để gán nhãn ổn định hơn, tránh nhiễu ảo cục bộ
+        raw_rms_array = np.array([self.file_rms[f] for f in self.files])
+        smoothed_rms_array = pd.Series(raw_rms_array).rolling(window=10, min_periods=1, center=True).mean().values
+        self.smoothed_file_rms = {f: smoothed_rms_array[i] for i, f in enumerate(self.files)}
+
         # Healthy baseline = P10 của các file trong vùng Healthy dự kiến (vùng Train)
         n_files = len(self.files)
         skip_end = int(n_files * self.skip_ratio)
@@ -186,9 +191,8 @@ class BearingDataset(Dataset):
         elif self.split == 'val':
             file_indices = healthy_indices[1::4]
         else: # test
-            train_val_indices = set(healthy_indices[0::2]) | set(healthy_indices[1::4])
-            remaining_healthy = [i for i in healthy_indices if i not in train_val_indices]
-            file_indices = remaining_healthy + faulty_indices
+            # [FIX] Đánh giá trên toàn bộ chu kỳ sống (Full Life-cycle) để tỷ lệ nhãn không bị thiên lệch
+            file_indices = list(range(n_files))
 
         if self.file_sample_ratio > 1 and self.split != 'test':
             file_indices = file_indices[::self.file_sample_ratio]
@@ -234,7 +238,7 @@ class BearingDataset(Dataset):
         stats = self._compute_physical_stats(x_raw)
         x = x_raw.clone()
 
-        current_file_rms = self.file_rms[self.files[f_idx]]
+        current_file_rms = self.smoothed_file_rms[self.files[f_idx]] # Dùng RMS đã làm mịn
         
         if self.label_strategy == '3sigma':
             threshold = self.healthy_rms_mean + 3.0 * self.healthy_rms_std

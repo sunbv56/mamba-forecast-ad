@@ -92,8 +92,20 @@ def evaluate_model(name, model, test_loader, config, device):
         # Tính LOCAL THRESHOLD (Self-learning)
         skip_end = int(n_total * skip_ratio)
         train_end = int(n_total * (skip_ratio + train_ratio))
+        
+        # Ngăn chặn rò rỉ dữ liệu lỗi vào tập tính ngưỡng POT (Leakage fix)
+        normal_indices = np.where(bearing_labels == 0)[0]
+        if len(normal_indices) > 0:
+            train_end = min(train_end, normal_indices[-1] + 1)
+            
         if train_end > skip_end:
-            healthy_scores = bearing_scores[skip_end:train_end]
+            # Lọc chắc chắn chỉ lấy nhãn 0
+            healthy_subset = bearing_scores[skip_end:train_end]
+            healthy_labels = bearing_labels[skip_end:train_end]
+            healthy_scores = healthy_subset[healthy_labels == 0]
+            
+            if len(healthy_scores) == 0:
+                healthy_scores = bearing_scores[:max(1, int(n_total * 0.1))]
         else:
             healthy_scores = bearing_scores[:max(1, int(n_total * 0.1))] # Fallback 10%
             
