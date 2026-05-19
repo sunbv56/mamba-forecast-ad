@@ -470,11 +470,11 @@ def main():
 
     # --- Model Initialization ---
     all_models = {
-        # "LSTM": LSTMForecaster(input_dim=2, hidden_dim=80, num_layers=3, horizon=horizon),
-        # "PatchLSTM": PatchLSTM(in_channels=2, patch_size=64, stride=64, d_model=80, num_layers=3, horizon=horizon),
+        "LSTM": LSTMForecaster(input_dim=2, hidden_dim=80, num_layers=3, horizon=horizon),
+        "PatchLSTM": PatchLSTM(in_channels=2, patch_size=64, stride=64, d_model=80, num_layers=3, horizon=horizon),
         # "TCN": TCNForecaster(input_dim=2, num_channels=[64]*4, kernel_size=3, horizon=horizon),
-        # "ModernTCN": ModernTCNForecaster(input_dim=2, d_model=96, num_layers=3, kernel_size=17, horizon=horizon),
-        # "iTransformer": iTransformer(input_dim=2, lookback=lookback, d_model=64, nhead=4, num_layers=3, horizon=horizon),
+        "ModernTCN": ModernTCNForecaster(input_dim=2, d_model=96, num_layers=3, kernel_size=17, horizon=horizon),
+        "iTransformer": iTransformer(input_dim=2, lookback=lookback, d_model=64, nhead=4, num_layers=3, horizon=horizon),
         # "PatchTST": PatchTST(in_channels=2, lookback=lookback, patch_size=64, stride=64, d_model=64, nhead=4, num_layers=3, horizon=horizon),
         "Mamba1-Hybrid": HybridMambaCNN({
             'model': {
@@ -508,19 +508,19 @@ def main():
         #     n_layers=4,
         #     use_vas=False
         # ),
-        "MambaTS-Official": MambaTSOfficial(MambaTSConfig(
-            in_channels=2,
-            lookback=lookback,
-            forecast_len=horizon,
-            patch_size=patch_size,
-            stride=patch_stride,
-            d_model=config['model'].get('mamba_d_model', 64),
-            n_layers=config['model'].get('mamba_n_layer', 4),
-            dropout=0.2, # Paper suggested 0.2-0.3
-            VPT_mode=1, # Enable Variable-Aware Scanning
-            ATSP_solver='SA',
-            oc_dim=2
-        )),
+        # "MambaTS-Official": MambaTSOfficial(MambaTSConfig(
+        #     in_channels=2,
+        #     lookback=lookback,
+        #     forecast_len=horizon,
+        #     patch_size=patch_size,
+        #     stride=patch_stride,
+        #     d_model=config['model'].get('mamba_d_model', 64),
+        #     n_layers=config['model'].get('mamba_n_layer', 4),
+        #     dropout=0.2, # Paper suggested 0.2-0.3
+        #     VPT_mode=1, # Enable Variable-Aware Scanning
+        #     ATSP_solver='SA',
+        #     oc_dim=2
+        # )),
     }
     
     if args.model == "all":
