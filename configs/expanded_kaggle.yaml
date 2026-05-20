@@ -15,21 +15,21 @@ data:
   train_ratio: 0.5
 
 model:
-  patch_size: 128           # Tăng patch size cho chuỗi dài
-  patch_stride: 64
-  trend_downsample: 32
-  cnn_out_channels: 16
-  mamba_d_model: 16
-  mamba_n_layer: 1          # Giữ layer thấp để kiểm soát bộ nhớ khi context dài
-  mamba_d_state: 8
-  mamba_d_conv: 4
-  mamba_expand: 2
+  patch_size: 64  
+  patch_stride: 32
+  trend_downsample: 64
+  cnn_out_channels: 64
+  mamba_d_model: 64
+  mamba_n_layer: 4 
+  mamba_d_state: 16
+  mamba_d_conv: 3
+  mamba_expand: 3
   bidirectional: false
-  decomp_kernel: 49          # Tăng kernel size cho decomp chuỗi dài
+  decomp_kernel: 25 
   auto_scale_baselines: true
 
 training:
-  batch_size: 8            # Giảm batch size để tránh OOM khi lookback lớn trên GPU 4GB
+  batch_size: 64            # Giảm batch size để tránh OOM khi lookback lớn trên GPU 4GB
   learning_rate: 5e-4
   epochs: 10
   device: "cuda"

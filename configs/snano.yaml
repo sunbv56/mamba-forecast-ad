@@ -9,8 +9,8 @@ data:
   highpass_freq: 2000
   label_strategy: 'rms' # 3sigma or rms
   window_stride: 1024
-  lookback: 4096
-  horizon: 1024
+  lookback: 512
+  horizon: 128
   skip_ratio: 0.05
   train_ratio: 0.4
 

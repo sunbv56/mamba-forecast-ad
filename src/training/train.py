@@ -29,6 +29,74 @@ from src.evaluation.anomaly_scorer import calculate_anomaly_score
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def find_closest_lstm(target, horizon):
+    best_dim = 8
+    best_params = 0
+    min_diff = float('inf')
+    for h in range(8, 1024, 2):
+        model = LSTMForecaster(input_dim=2, hidden_dim=h, num_layers=3, horizon=horizon)
+        p = count_parameters(model)
+        diff = abs(p - target)
+        if diff < min_diff:
+            min_diff = diff
+            best_dim = h
+            best_params = p
+        if p > target and diff > min_diff:
+            break
+    return best_dim, best_params
+
+def find_closest_patch_lstm(target, patch_size, stride, horizon):
+    best_dim = 8
+    best_params = 0
+    min_diff = float('inf')
+    for d in range(8, 1024, 2):
+        model = PatchLSTM(in_channels=2, patch_size=patch_size, stride=stride, d_model=d, num_layers=3, horizon=horizon)
+        p = count_parameters(model)
+        diff = abs(p - target)
+        if diff < min_diff:
+            min_diff = diff
+            best_dim = d
+            best_params = p
+        if p > target and diff > min_diff:
+            break
+    return best_dim, best_params
+
+def find_closest_modern_tcn(target, horizon):
+    best_dim = 8
+    best_params = 0
+    min_diff = float('inf')
+    for d in range(8, 1024, 2):
+        model = ModernTCNForecaster(input_dim=2, d_model=d, num_layers=3, kernel_size=17, horizon=horizon)
+        p = count_parameters(model)
+        diff = abs(p - target)
+        if diff < min_diff:
+            min_diff = diff
+            best_dim = d
+            best_params = p
+        if p > target and diff > min_diff:
+            break
+    return best_dim, best_params
+
+def find_closest_itransformer(target, lookback, horizon):
+    best_dim = 8
+    best_params = 0
+    min_diff = float('inf')
+    for d in range(8, 1024, 4):
+        nhead = 4 if d >= 4 else 1
+        if d % 4 != 0:
+            nhead = 2 if d % 2 == 0 else 1
+        model = iTransformer(input_dim=2, lookback=lookback, d_model=d, nhead=nhead, num_layers=3, horizon=horizon)
+        p = count_parameters(model)
+        diff = abs(p - target)
+        if diff < min_diff:
+            min_diff = diff
+            best_dim = d
+            best_params = p
+        if p > target and diff > min_diff:
+            break
+    return best_dim, best_params
+
 from src.evaluation.metrics import calculate_threshold_3sigma, calculate_threshold_robust, calculate_threshold_percentile, calculate_threshold_gmm, find_best_threshold, calculate_metrics, calculate_threshold_pot
 
 # --- Configuration Flags ---
@@ -469,35 +537,66 @@ def main():
     print(f"Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}, Test samples: {len(test_dataset)}")
 
     # --- Model Initialization ---
+    # First, instantiate Mamba1-Hybrid to get target parameters
+    mamba_model = HybridMambaCNN({
+        'model': {
+            'mamba_version': 1,
+            'mamba_d_model': config['model'].get('mamba_d_model', 64), 
+            'mamba_n_layer': config['model'].get('mamba_n_layer', 4),
+            'mamba_d_state': config['model'].get('mamba_d_state', 16), 
+            'mamba_d_conv': config['model'].get('mamba_d_conv', 4), 
+            'mamba_expand': config['model'].get('mamba_expand', 2),
+            'forecast_len': horizon, 
+            'patch_size': patch_size, 
+            'stride': patch_stride,
+            'trend_downsample': trend_downsample,
+            'in_channels': 2, 'lookback': lookback,
+            'decomp_kernel': config['model'].get('decomp_kernel', 25), 
+            'use_multiscale': True,
+        },
+        'data': {
+            'patch_size': patch_size, 
+            'stride': patch_stride, 
+            'lookback': lookback
+        }
+    })
+    mamba_params = count_parameters(mamba_model)
+
+    auto_scale = config.get('model', {}).get('auto_scale_baselines', False)
+    if auto_scale:
+        print(f"\n[AUTO-SCALE] Đang tự động điều chỉnh siêu tham số các Baselines khớp Ngân sách Tham số của Mamba1-Hybrid (~{mamba_params:,} params)...")
+        lstm_dim, lstm_p = find_closest_lstm(mamba_params, horizon)
+        pl_dim, pl_p = find_closest_patch_lstm(mamba_params, patch_size, patch_stride, horizon)
+        tcn_dim, tcn_p = find_closest_modern_tcn(mamba_params, horizon)
+        it_dim, it_p = find_closest_itransformer(mamba_params, lookback, horizon)
+        
+        print(f"  -> LSTM: hidden_dim={lstm_dim} ({lstm_p:,} params)")
+        print(f"  -> PatchLSTM: d_model={pl_dim} ({pl_p:,} params)")
+        print(f"  -> ModernTCN: d_model={tcn_dim} ({tcn_p:,} params)")
+        print(f"  -> iTransformer: d_model={it_dim} ({it_p:,} params)")
+        
+        lstm_forecaster = LSTMForecaster(input_dim=2, hidden_dim=lstm_dim, num_layers=3, horizon=horizon)
+        patch_lstm = PatchLSTM(in_channels=2, patch_size=64, stride=64, d_model=pl_dim, num_layers=3, horizon=horizon)
+        modern_tcn = ModernTCNForecaster(input_dim=2, d_model=tcn_dim, num_layers=3, kernel_size=17, horizon=horizon)
+        
+        nhead = 4 if it_dim >= 4 else 1
+        if it_dim % 4 != 0:
+            nhead = 2 if it_dim % 2 == 0 else 1
+        itransformer = iTransformer(input_dim=2, lookback=lookback, d_model=it_dim, nhead=nhead, num_layers=3, horizon=horizon)
+    else:
+        print("\n[AUTO-SCALE] Sử dụng cấu hình Baselines mặc định...")
+        lstm_forecaster = LSTMForecaster(input_dim=2, hidden_dim=140, num_layers=3, horizon=horizon)
+        patch_lstm = PatchLSTM(in_channels=2, patch_size=64, stride=64, d_model=120, num_layers=3, horizon=horizon)
+        modern_tcn = ModernTCNForecaster(input_dim=2, d_model=160, num_layers=3, kernel_size=17, horizon=horizon)
+        itransformer = iTransformer(input_dim=2, lookback=lookback, d_model=64, nhead=4, num_layers=3, horizon=horizon)
+
     all_models = {
-        "LSTM": LSTMForecaster(input_dim=2, hidden_dim=80, num_layers=3, horizon=horizon),
-        "PatchLSTM": PatchLSTM(in_channels=2, patch_size=64, stride=64, d_model=80, num_layers=3, horizon=horizon),
-        # "TCN": TCNForecaster(input_dim=2, num_channels=[64]*4, kernel_size=3, horizon=horizon),
-        "ModernTCN": ModernTCNForecaster(input_dim=2, d_model=96, num_layers=3, kernel_size=17, horizon=horizon),
-        "iTransformer": iTransformer(input_dim=2, lookback=lookback, d_model=64, nhead=4, num_layers=3, horizon=horizon),
-        # "PatchTST": PatchTST(in_channels=2, lookback=lookback, patch_size=64, stride=64, d_model=64, nhead=4, num_layers=3, horizon=horizon),
-        "Mamba1-Hybrid": HybridMambaCNN({
-            'model': {
-                'mamba_version': 1,
-                'mamba_d_model': config['model'].get('mamba_d_model', 64), 
-                'mamba_n_layer': config['model'].get('mamba_n_layer', 4),
-                'mamba_d_state': config['model'].get('mamba_d_state', 16), 
-                'mamba_d_conv': config['model'].get('mamba_d_conv', 4), 
-                'mamba_expand': config['model'].get('mamba_expand', 2),
-                'forecast_len': horizon, 
-                'patch_size': patch_size, 
-                'stride': patch_stride,
-                'trend_downsample': trend_downsample,
-                'in_channels': 2, 'lookback': lookback,
-                'decomp_kernel': config['model'].get('decomp_kernel', 25), 
-                'use_multiscale': True,
-            },
-            'data': {
-                'patch_size': patch_size, 
-                'stride': patch_stride, 
-                'lookback': lookback
-            }
-        }),
+        "LSTM": lstm_forecaster,
+        "PatchLSTM": patch_lstm,
+        "ModernTCN": modern_tcn,
+        "iTransformer": itransformer,
+        "Mamba1-Hybrid": mamba_model
+    }
         # "MambaTS-Paper": MambaTS(
         #     in_channels=2,
         #     lookback=lookback,
@@ -521,7 +620,7 @@ def main():
         #     ATSP_solver='SA',
         #     oc_dim=2
         # )),
-    }
+    # }
     
     if args.model == "all":
         models_to_train = all_models
