@@ -10,7 +10,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 print("--- Đang khởi tạo các mô hình để kiểm tra tham số ---")
-from src.models.mamba import HybridMambaCNN
+from src.models.mamba import HybridMambaCNN, SimpleMamba
 from src.models.baselines.lstm import LSTMForecaster
 from src.models.baselines.modern_tcn import ModernTCNForecaster
 from src.models.baselines.patch_models import PatchTST, PatchLSTM
@@ -91,6 +91,38 @@ def find_closest_patchtst(target, lookback, patch_size, stride, horizon):
             break
     return best_dim, best_params
 
+def find_closest_simple_mamba(target, lookback, patch_size, stride, horizon, mamba_n_layer=4, mamba_d_state=16, mamba_d_conv=4, mamba_expand=2, mamba_version=1):
+    best_dim = 8
+    best_params = 0
+    min_diff = float('inf')
+    for d in range(8, 1024, 2):
+        model = SimpleMamba({
+            'model': {
+                'mamba_version': mamba_version,
+                'mamba_d_model': d,
+                'mamba_n_layer': mamba_n_layer,
+                'mamba_d_state': mamba_d_state,
+                'mamba_d_conv': mamba_d_conv,
+                'mamba_expand': mamba_expand,
+                'forecast_len': horizon,
+                'patch_size': patch_size,
+                'stride': stride,
+                'in_channels': 2,
+                'lookback': lookback,
+            },
+            'data': {'patch_size': patch_size, 'stride': stride, 'lookback': lookback}
+        })
+        p = count_parameters(model)
+        diff = abs(p - target)
+        if diff < min_diff:
+            min_diff = diff
+            best_dim = d
+            best_params = p
+        if p > target and diff > min_diff:
+            break
+    return best_dim, best_params
+
+
 def main():
     config_files = ["snano.yaml", "nano.yaml"]
     
@@ -142,6 +174,26 @@ def main():
         mamba_total_params = count_parameters(hybrid_model)
         mamba_core_params = count_mamba_core_parameters(hybrid_model)
 
+        # 1.5. SimpleMamba (Pure Mamba)
+        simple_mamba = SimpleMamba({
+            'model': {
+                'mamba_version': 1,
+                'mamba_d_model': mamba_d_model,
+                'mamba_n_layer': mamba_n_layer,
+                'mamba_d_state': config['model'].get('mamba_d_state', 16),
+                'mamba_d_conv': config['model'].get('mamba_d_conv', 4),
+                'mamba_expand': config['model'].get('mamba_expand', 2),
+                'forecast_len': horizon,
+                'patch_size': patch_size,
+                'stride': patch_stride,
+                'in_channels': 2,
+                'lookback': lookback,
+            },
+            'data': {'patch_size': patch_size, 'stride': patch_stride, 'lookback': lookback}
+        })
+        simple_mamba_params = count_parameters(simple_mamba)
+
+
         # ------------------------------------------------------------------
         # Setup 1: Actual Sizing (Hardcoded in train.py)
         # ------------------------------------------------------------------
@@ -154,6 +206,11 @@ def main():
             "Config": config_file, "Model": "Mamba1-Hybrid (Core)",
             "Params": mamba_core_params, "Lookback": lookback, "Horizon": horizon,
             "Details": f"d_model={mamba_d_model} (No Trend Head)"
+        })
+        results_actual.append({
+            "Config": config_file, "Model": "Simple-Mamba",
+            "Params": simple_mamba_params, "Lookback": lookback, "Horizon": horizon,
+            "Details": f"d_model={mamba_d_model}"
         })
         results_actual.append({
             "Config": config_file, "Model": "LSTM",
@@ -188,6 +245,11 @@ def main():
             "Config": config_file, "Model": "Mamba1-Hybrid (Core)",
             "Params": mamba_core_params, "Lookback": lookback, "Horizon": horizon,
             "Details": f"d_model={mamba_d_model} (No Trend Head)"
+        })
+        results_fair.append({
+            "Config": config_file, "Model": "Simple-Mamba",
+            "Params": simple_mamba_params, "Lookback": lookback, "Horizon": horizon,
+            "Details": f"d_model={mamba_d_model}"
         })
         results_fair.append({
             "Config": config_file, "Model": "LSTM",
@@ -252,6 +314,23 @@ def main():
             "Config": config_file, "Model": "PatchTST",
             "Params": pt_params, "Lookback": lookback, "Horizon": horizon,
             "Details": f"d_model={pt_dim}"
+        })
+
+        # SimpleMamba
+        sm_n_layer = config['model'].get('mamba_n_layer', 4)
+        sm_d_state = config['model'].get('mamba_d_state', 16)
+        sm_d_conv = config['model'].get('mamba_d_conv', 4)
+        sm_expand = config['model'].get('mamba_expand', 2)
+        sm_version = config['model'].get('mamba_version', 1)
+        sm_dim, sm_params = find_closest_simple_mamba(
+            mamba_total_params, lookback, patch_size, patch_stride, horizon,
+            mamba_n_layer=sm_n_layer, mamba_d_state=sm_d_state,
+            mamba_d_conv=sm_d_conv, mamba_expand=sm_expand, mamba_version=sm_version
+        )
+        results_budget.append({
+            "Config": config_file, "Model": "Simple-Mamba",
+            "Params": sm_params, "Lookback": lookback, "Horizon": horizon,
+            "Details": f"d_model={sm_dim}"
         })
 
     # Print results
