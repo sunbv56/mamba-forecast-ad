@@ -22,7 +22,7 @@ from src.data import BearingDataset, MultiBearingDataset
 from src.models.baselines.lstm import LSTMForecaster
 from src.models.baselines.tcn import TCNForecaster
 from src.models.baselines.modern_tcn import ModernTCNForecaster
-from src.models.baselines.transformer_small import iTransformer, PositionalEncoding
+from src.models.baselines.transformer_small import PositionalEncoding
 from src.models.baselines.patch_models import PatchTST, PatchLSTM
 from src.models.mamba import HybridMambaCNN, MambaTS, MambaTSOfficial, MambaTSConfig
 from src.evaluation.anomaly_scorer import calculate_anomaly_score
@@ -78,7 +78,7 @@ def find_closest_modern_tcn(target, horizon):
             break
     return best_dim, best_params
 
-def find_closest_itransformer(target, lookback, horizon):
+def find_closest_patchtst(target, lookback, patch_size, stride, horizon):
     best_dim = 8
     best_params = 0
     min_diff = float('inf')
@@ -86,7 +86,7 @@ def find_closest_itransformer(target, lookback, horizon):
         nhead = 4 if d >= 4 else 1
         if d % 4 != 0:
             nhead = 2 if d % 2 == 0 else 1
-        model = iTransformer(input_dim=2, lookback=lookback, d_model=d, nhead=nhead, num_layers=3, horizon=horizon)
+        model = PatchTST(in_channels=2, lookback=lookback, patch_size=patch_size, stride=stride, d_model=d, nhead=nhead, num_layers=4, horizon=horizon)
         p = count_parameters(model)
         diff = abs(p - target)
         if diff < min_diff:
@@ -467,7 +467,7 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
 def main():
     parser = argparse.ArgumentParser(description="Train and evaluate forecasting models for anomaly detection.")
     parser.add_argument("--config", type=str, default="configs/default.yaml", help="Path to config file.")
-    parser.add_argument("--model", type=str, default="all", help="Model name to train (all, LSTM, PatchLSTM, TCN, ModernTCN, Transformer, PatchTransformer, Mamba-Hybrid)")
+    parser.add_argument("--model", type=str, default="all", help="Model name to train (all, LSTM, PatchLSTM, TCN, ModernTCN, PatchTST, Mamba-Hybrid)")
     parser.add_argument("--epochs", type=int, help="Override epochs from config.")
     parser.add_argument("--batch_size", type=int, help="Override batch size.")
     parser.add_argument("--data_dir", type=str, help="Override data directory.")
@@ -552,7 +552,10 @@ def main():
             'trend_downsample': trend_downsample,
             'in_channels': 2, 'lookback': lookback,
             'decomp_kernel': config['model'].get('decomp_kernel', 25), 
-            'use_multiscale': True,
+            'use_multiscale': config['model'].get('use_multiscale', True),
+            'use_revin': config['model'].get('use_revin', True),
+            'use_decomposition': config['model'].get('use_decomposition', True),
+            'use_stats': config['model'].get('use_stats', True),
         },
         'data': {
             'patch_size': patch_size, 
@@ -568,33 +571,33 @@ def main():
         lstm_dim, lstm_p = find_closest_lstm(mamba_params, horizon)
         pl_dim, pl_p = find_closest_patch_lstm(mamba_params, patch_size, patch_stride, horizon)
         tcn_dim, tcn_p = find_closest_modern_tcn(mamba_params, horizon)
-        it_dim, it_p = find_closest_itransformer(mamba_params, lookback, horizon)
+        pt_dim, pt_p = find_closest_patchtst(mamba_params, lookback, 16, 8, horizon)
         
         print(f"  -> LSTM: hidden_dim={lstm_dim} ({lstm_p:,} params)")
         print(f"  -> PatchLSTM: d_model={pl_dim} ({pl_p:,} params)")
         print(f"  -> ModernTCN: d_model={tcn_dim} ({tcn_p:,} params)")
-        print(f"  -> iTransformer: d_model={it_dim} ({it_p:,} params)")
+        print(f"  -> PatchTST: d_model={pt_dim} ({pt_p:,} params)")
         
         lstm_forecaster = LSTMForecaster(input_dim=2, hidden_dim=lstm_dim, num_layers=3, horizon=horizon)
         patch_lstm = PatchLSTM(in_channels=2, patch_size=64, stride=64, d_model=pl_dim, num_layers=3, horizon=horizon)
         modern_tcn = ModernTCNForecaster(input_dim=2, d_model=tcn_dim, num_layers=3, kernel_size=17, horizon=horizon)
         
-        nhead = 4 if it_dim >= 4 else 1
-        if it_dim % 4 != 0:
-            nhead = 2 if it_dim % 2 == 0 else 1
-        itransformer = iTransformer(input_dim=2, lookback=lookback, d_model=it_dim, nhead=nhead, num_layers=3, horizon=horizon)
+        nhead = 4 if pt_dim >= 4 else 1
+        if pt_dim % 4 != 0:
+            nhead = 2 if pt_dim % 2 == 0 else 1
+        patchtst = PatchTST(in_channels=2, lookback=lookback, patch_size=16, stride=8, d_model=pt_dim, nhead=nhead, num_layers=4, horizon=horizon)
     else:
         print("\n[AUTO-SCALE] Sử dụng cấu hình Baselines mặc định...")
         lstm_forecaster = LSTMForecaster(input_dim=2, hidden_dim=140, num_layers=3, horizon=horizon)
         patch_lstm = PatchLSTM(in_channels=2, patch_size=64, stride=64, d_model=120, num_layers=3, horizon=horizon)
         modern_tcn = ModernTCNForecaster(input_dim=2, d_model=160, num_layers=3, kernel_size=17, horizon=horizon)
-        itransformer = iTransformer(input_dim=2, lookback=lookback, d_model=64, nhead=4, num_layers=3, horizon=horizon)
+        patchtst = PatchTST(in_channels=2, lookback=lookback, patch_size=16, stride=8, d_model=128, nhead=16, num_layers=3, horizon=horizon)
 
     all_models = {
         "LSTM": lstm_forecaster,
         "PatchLSTM": patch_lstm,
         "ModernTCN": modern_tcn,
-        "iTransformer": itransformer,
+        "PatchTST": patchtst,
         "Mamba1-Hybrid": mamba_model
     }
         # "MambaTS-Paper": MambaTS(

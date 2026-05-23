@@ -18,8 +18,7 @@ from src.data import MultiBearingDataset
 from src.models.mamba import HybridMambaCNN, MambaTSOfficial, MambaTSConfig
 from src.models.baselines.lstm import LSTMForecaster
 from src.models.baselines.modern_tcn import ModernTCNForecaster
-from src.models.baselines.transformer_small import iTransformer
-from src.models.baselines.patch_models import PatchLSTM
+from src.models.baselines.patch_models import PatchTST, PatchLSTM
 from src.evaluation.anomaly_scorer import calculate_anomaly_score
 from src.evaluation.metrics import (
     calculate_threshold_3sigma, calculate_threshold_robust, 
@@ -219,9 +218,9 @@ def main():
     parser = argparse.ArgumentParser(description="Evaluate trained models.")
     parser.add_argument("--config", type=str, default="configs/default.yaml", help="Path to config file.")
     parser.add_argument("--model_path", type=str, help="Path to .pth checkpoint (optional in multi-model mode).")
-    parser.add_argument("--model_type", type=str, default="Mamba1-Hybrid", help="Model type (e.g., MambaTS-Official, Mamba1-Hybrid, LSTM, PatchLSTM, ModernTCN, iTransformer).")
+    parser.add_argument("--model_type", type=str, default="Mamba1-Hybrid", help="Model type (e.g., MambaTS-Official, Mamba1-Hybrid, LSTM, PatchLSTM, ModernTCN, PatchTST).")
     parser.add_argument("--batch_size", type=int, help="Override batch_size from config")
-    parser.add_argument("--models", type=str, default=None, help="Comma-separated list of models to evaluate (e.g., 'LSTM,PatchLSTM,ModernTCN,iTransformer,Mamba1-Hybrid' or 'all').")
+    parser.add_argument("--models", type=str, default=None, help="Comma-separated list of models to evaluate (e.g., 'LSTM,PatchLSTM,ModernTCN,PatchTST,Mamba1-Hybrid' or 'all').")
     parser.add_argument("--models_dir", type=str, default="results/models", help="Directory where trained model checkpoints are saved.")
     
     args = parser.parse_args()
@@ -305,7 +304,10 @@ def main():
                     'trend_downsample': trend_downsample,
                     'in_channels': 2, 'lookback': lookback,
                     'decomp_kernel': config['model'].get('decomp_kernel', 25), 
-                    'use_multiscale': True,
+                    'use_multiscale': config['model'].get('use_multiscale', True),
+                    'use_revin': config['model'].get('use_revin', True),
+                    'use_decomposition': config['model'].get('use_decomposition', True),
+                    'use_stats': config['model'].get('use_stats', True),
                 },
                 'data': {
                     'patch_size': patch_size, 
@@ -322,9 +324,9 @@ def main():
         elif model_type == "ModernTCN":
             print(f"Initializing ModernTCN with hardcoded parameters: d_model=144, num_layers=3, kernel_size=17, horizon={horizon}")
             return ModernTCNForecaster(input_dim=2, d_model=144, num_layers=3, kernel_size=17, horizon=horizon)
-        elif model_type == "iTransformer":
-            print(f"Initializing iTransformer with hardcoded parameters: d_model=28, nhead=4, num_layers=3, horizon={horizon}, lookback={lookback}")
-            return iTransformer(input_dim=2, lookback=lookback, d_model=28, nhead=4, num_layers=3, horizon=horizon)
+        elif model_type == "PatchTST":
+            print(f"Initializing PatchTST with standard paper parameters: d_model=128, nhead=16, num_layers=3, horizon={horizon}, lookback={lookback}, patch_size=16, stride=8")
+            return PatchTST(in_channels=2, lookback=lookback, patch_size=16, stride=8, d_model=128, nhead=16, num_layers=3, horizon=horizon)
         else:
             raise ValueError(f"Unsupported model type: {model_type}")
 
@@ -332,7 +334,7 @@ def main():
     results = {}
     if args.models:
         if args.models == "all":
-            models_to_eval = ["LSTM", "PatchLSTM", "ModernTCN", "iTransformer", "Mamba1-Hybrid"]
+            models_to_eval = ["LSTM", "PatchLSTM", "ModernTCN", "PatchTST", "Mamba1-Hybrid"]
         else:
             models_to_eval = [m.strip() for m in args.models.split(',')]
             

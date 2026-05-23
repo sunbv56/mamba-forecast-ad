@@ -50,6 +50,11 @@ class HybridMambaCNN(nn.Module):
         lookback     = model_cfg.get('lookback', data_cfg.get('lookback', 1024))
         decomp_kernel = model_cfg.get('decomp_kernel', 25)
 
+        # --- Ablation Study Toggles ---
+        self.use_revin = model_cfg.get('use_revin', True)
+        self.use_decomposition = model_cfg.get('use_decomposition', True)
+        self.use_stats = model_cfg.get('use_stats', True)
+
         # ------------------------------------------------------------------
         # 1. RevIN — học được affine per-channel
         # ------------------------------------------------------------------
@@ -95,7 +100,8 @@ class HybridMambaCNN(nn.Module):
         self.seasonal_head = FusionForecastHead(
             d_model=d_model,
             forecast_len=forecast_len,
-            out_channels=1
+            out_channels=1,
+            use_stats=self.use_stats
         )
 
         # ------------------------------------------------------------------
@@ -122,17 +128,22 @@ class HybridMambaCNN(nn.Module):
         B, C, L = x.shape
 
         # --- RevIN normalize ---
-        x = self.revin(x, mode='norm')                # (B, C, L)
+        if self.use_revin:
+            x = self.revin(x, mode='norm')                # (B, C, L)
 
         # --- Series Decomposition ---
-        seasonal, trend = self.decomp(x)              # both (B, C, L)
-
-        # ── Trend Branch ──────────────────────────────────────────────────
-        if self.trend_downsample > 1:
-            trend_pooled = self.trend_pool(trend)      # (B, C, L // downsample)
-            trend_out = self.trend_head(trend_pooled)  # (B, C, forecast_len)
+        if self.use_decomposition:
+            seasonal, trend = self.decomp(x)              # both (B, C, L)
+            
+            # ── Trend Branch ──────────────────────────────────────────────────
+            if self.trend_downsample > 1:
+                trend_pooled = self.trend_pool(trend)      # (B, C, L // downsample)
+                trend_out = self.trend_head(trend_pooled)  # (B, C, forecast_len)
+            else:
+                trend_out = self.trend_head(trend)         # (B, C, forecast_len)
         else:
-            trend_out = self.trend_head(trend)         # (B, C, forecast_len)
+            seasonal = x
+            trend_out = None
 
         # ── Seasonal Branch ───────────────────────────────────────────────
         # Patching: (B, C, L) → (B, C, N, d_model)
@@ -145,18 +156,23 @@ class HybridMambaCNN(nn.Module):
 
         # Stats for CI mode
         stats_ci = None
-        if stats is not None:
+        if stats is not None and self.use_stats:
             stats_ci = stats.reshape(B * C, -1)       # (B*C, 8)
 
         s_out = self.seasonal_head(s, stats=stats_ci)  # (B*C, 1, forecast_len)
         s_out = s_out.reshape(B, C, -1)                # (B, C, forecast_len)
 
         # ── Learnable Mixing ──────────────────────────────────────────────
-        alpha = torch.sigmoid(self.mix_alpha).view(1, C, 1)   # (1, C, 1)
-        forecast = alpha * s_out + (1.0 - alpha) * trend_out  # (B, C, forecast_len)
+        if self.use_decomposition:
+            alpha = torch.sigmoid(self.mix_alpha).view(1, C, 1)   # (1, C, 1)
+            forecast = alpha * s_out + (1.0 - alpha) * trend_out  # (B, C, forecast_len)
+        else:
+            forecast = s_out
 
         # --- RevIN de-normalize ---
-        forecast = self.revin(forecast, mode='denorm')  # (B, C, forecast_len)
+        if self.use_revin:
+            forecast = self.revin(forecast, mode='denorm')  # (B, C, forecast_len)
 
         return forecast
+
 

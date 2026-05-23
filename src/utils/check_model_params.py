@@ -13,8 +13,7 @@ print("--- Đang khởi tạo các mô hình để kiểm tra tham số ---")
 from src.models.mamba import HybridMambaCNN
 from src.models.baselines.lstm import LSTMForecaster
 from src.models.baselines.modern_tcn import ModernTCNForecaster
-from src.models.baselines.transformer_small import iTransformer
-from src.models.baselines.patch_models import PatchLSTM
+from src.models.baselines.patch_models import PatchTST, PatchLSTM
 
 def count_parameters(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -73,7 +72,7 @@ def find_closest_modern_tcn(target, horizon):
             break
     return best_dim, best_params
 
-def find_closest_itransformer(target, lookback, horizon):
+def find_closest_patchtst(target, lookback, patch_size, stride, horizon):
     best_dim = 8
     best_params = 0
     min_diff = float('inf')
@@ -81,7 +80,7 @@ def find_closest_itransformer(target, lookback, horizon):
         nhead = 4 if d >= 4 else 1
         if d % 4 != 0:
             nhead = 2 if d % 2 == 0 else 1
-        model = iTransformer(input_dim=2, lookback=lookback, d_model=d, nhead=nhead, num_layers=3, horizon=horizon)
+        model = PatchTST(in_channels=2, lookback=lookback, patch_size=patch_size, stride=stride, d_model=d, nhead=nhead, num_layers=4, horizon=horizon)
         p = count_parameters(model)
         diff = abs(p - target)
         if diff < min_diff:
@@ -93,7 +92,7 @@ def find_closest_itransformer(target, lookback, horizon):
     return best_dim, best_params
 
 def main():
-    config_files = ["snano.yaml", "expanded_kaggle.yaml"]
+    config_files = ["snano.yaml", "nano.yaml"]
     
     results_actual = []
     results_fair = []
@@ -172,9 +171,9 @@ def main():
             "Lookback": lookback, "Horizon": horizon, "Details": "d_model=160"
         })
         results_actual.append({
-            "Config": config_file, "Model": "iTransformer",
-            "Params": count_parameters(iTransformer(input_dim=2, lookback=lookback, d_model=64, nhead=4, num_layers=3, horizon=horizon)),
-            "Lookback": lookback, "Horizon": horizon, "Details": "d_model=64"
+            "Config": config_file, "Model": "PatchTST",
+            "Params": count_parameters(PatchTST(in_channels=2, lookback=lookback, patch_size=16, stride=8, d_model=128, nhead=16, num_layers=3, horizon=horizon)),
+            "Lookback": lookback, "Horizon": horizon, "Details": "d_model=128 (Paper)"
         })
 
         # ------------------------------------------------------------------
@@ -209,8 +208,8 @@ def main():
         if mamba_d_model % 4 != 0:
             nhead = 2 if mamba_d_model % 2 == 0 else 1
         results_fair.append({
-            "Config": config_file, "Model": "iTransformer",
-            "Params": count_parameters(iTransformer(input_dim=2, lookback=lookback, d_model=mamba_d_model, nhead=nhead, num_layers=mamba_n_layer, horizon=horizon)),
+            "Config": config_file, "Model": "PatchTST",
+            "Params": count_parameters(PatchTST(in_channels=2, lookback=lookback, patch_size=patch_size, stride=patch_stride, d_model=mamba_d_model, nhead=nhead, num_layers=mamba_n_layer, horizon=horizon)),
             "Lookback": lookback, "Horizon": horizon, "Details": f"d_model={mamba_d_model}"
         })
 
@@ -247,12 +246,12 @@ def main():
             "Details": f"d_model={tcn_dim}"
         })
         
-        # iTransformer
-        it_dim, it_params = find_closest_itransformer(mamba_total_params, lookback, horizon)
+        # PatchTST
+        pt_dim, pt_params = find_closest_patchtst(mamba_total_params, lookback, 16, 8, horizon)
         results_budget.append({
-            "Config": config_file, "Model": "iTransformer",
-            "Params": it_params, "Lookback": lookback, "Horizon": horizon,
-            "Details": f"d_model={it_dim}"
+            "Config": config_file, "Model": "PatchTST",
+            "Params": pt_params, "Lookback": lookback, "Horizon": horizon,
+            "Details": f"d_model={pt_dim}"
         })
 
     # Print results
