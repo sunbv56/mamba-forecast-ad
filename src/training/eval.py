@@ -26,11 +26,17 @@ from src.evaluation.metrics import (
     find_best_threshold, calculate_metrics, calculate_threshold_pot
 )
 
+comparison_results = {}
+
 def evaluate_model(name, model, test_loader, config, device):
     model.to(device)
     model.eval()
 
     print(f"\n>>> EVALUATION ON TEST (Per-Bearing Anomaly Detection Performance)...")
+    
+    # Khởi tạo lại thống kê bộ nhớ đỉnh nếu dùng GPU
+    if device.type == 'cuda':
+        torch.cuda.reset_peak_memory_stats(device)
     
     macro_metrics = {
         t_name: {"F1": [], "FAR": [], "AUC": [], "AUPRC": []} 
@@ -44,13 +50,27 @@ def evaluate_model(name, model, test_loader, config, device):
         "MAPE": []
     }
     
-    total_test_latencies = []
+    transfer_latencies = []
+    inf_latencies = []
+    scoring_latencies = []
+    decision_latencies = []
+    total_eval_latencies = []
+    
+    calib_times = {
+        "3-Sigma": [],
+        "Robust": [],
+        "Percentile": [],
+        "POT": [],
+        "Self-Learn": [],
+        "Optimal": []
+    }
     
     # Lấy thông số từ dataset cấu hình
     skip_ratio = config['data'].get('skip_ratio', 0.1)
     train_ratio = config['data'].get('train_ratio', 0.5)
 
     test_datasets = test_loader.dataset.datasets if hasattr(test_loader.dataset, 'datasets') else [test_loader.dataset]
+    last_bearing_data = {}
 
     model.eval()
     for test_idx, ds in enumerate(test_datasets):
@@ -67,13 +87,24 @@ def evaluate_model(name, model, test_loader, config, device):
         bearing_mape_list = []
         
         with torch.no_grad():
-            for batch in tqdm(loader, desc=f"Inference {bearing_name}", leave=False):
-                x, y = batch[0].to(device), batch[1].to(device)
+            pbar = tqdm(loader, desc=f"Inference {bearing_name}", leave=False)
+            for batch in pbar:
+                # 1. Đo lường thời gian truyền dữ liệu (CPU -> GPU)
+                if device.type == 'cuda':
+                    torch.cuda.synchronize()
+                t0 = time.time()
+                
+                x = batch[0].to(device)
+                y = batch[1].to(device)
                 stats = batch[2].to(device) if len(batch) > 2 and batch[2].shape[-1] == 8 else None
                 # Check for OC (USE_OPERATING_CONDITIONS is true by default for MambaTSOfficial)
                 oc = batch[4].to(device) if len(batch) > 4 else None
-
-                start_inf = time.time()
+                
+                if device.type == 'cuda':
+                    torch.cuda.synchronize()
+                t1 = time.time()
+                
+                # 2. Đo lường thời gian Model Inference (Forward Pass)
                 with torch.amp.autocast('cuda', enabled=(device.type == 'cuda')):
                     if stats is not None and isinstance(model, HybridMambaCNN):
                         y_pred = model(x, stats)
@@ -82,9 +113,25 @@ def evaluate_model(name, model, test_loader, config, device):
                     else:
                         y_pred = model(x)
                 
-                total_test_latencies.append((time.time() - start_inf) / x.size(0))
+                if device.type == 'cuda':
+                    torch.cuda.synchronize()
+                t2 = time.time()
                 
+                # 3. Đo lường thời gian Tính điểm bất thường (Anomaly Scoring)
                 scores = calculate_anomaly_score(y, y_pred, metric='mse', normalized=False)
+                
+                if device.type == 'cuda':
+                    torch.cuda.synchronize()
+                t3 = time.time()
+                
+                # 4. Đo lường thời gian Ra quyết định (Threshold Decision)
+                dummy_threshold = 0.5
+                is_anomaly = scores > dummy_threshold
+                
+                if device.type == 'cuda':
+                    torch.cuda.synchronize()
+                t4 = time.time()
+                
                 bearing_scores.extend(scores.tolist())
 
                 if len(batch) > 3:
@@ -95,6 +142,25 @@ def evaluate_model(name, model, test_loader, config, device):
                         bearing_labels.extend([int(l) for l in labels_batch])
                 else:
                     bearing_labels.extend([0] * x.size(0))
+
+                # Tính toán tốc độ / độ trễ trên mỗi sample (ms/sample)
+                n_samples = x.size(0)
+                transfer_ms = (t1 - t0) * 1000 / n_samples
+                inf_ms = (t2 - t1) * 1000 / n_samples
+                score_ms = (t3 - t2) * 1000 / n_samples
+                decision_ms = (t4 - t3) * 1000 / n_samples
+                total_ms = (t4 - t0) * 1000 / n_samples
+                
+                transfer_latencies.append(transfer_ms)
+                inf_latencies.append(inf_ms)
+                scoring_latencies.append(score_ms)
+                decision_latencies.append(decision_ms)
+                total_eval_latencies.append(total_ms)
+
+                # Hiển thị VRAM hoạt động thực tế trên tqdm của từng vòng bi
+                if device.type == 'cuda':
+                    vram_active = torch.cuda.memory_allocated(device) / (1024 ** 2)
+                    pbar.set_postfix({'vram_mb': f'{vram_active:.0f}'})
 
                 # Compute Forecasting Metrics for the batch
                 y_cpu = y.detach().cpu().numpy()
@@ -150,12 +216,30 @@ def evaluate_model(name, model, test_loader, config, device):
         else:
             healthy_scores = bearing_scores[:max(1, int(n_total * 0.1))] # Fallback 10%
             
+        # Đo lường thời gian hiệu chuẩn từng thuật toán ngưỡng
+        t_cal = time.time()
         local_th_3s  = calculate_threshold_3sigma(healthy_scores)
+        calib_times["3-Sigma"].append((time.time() - t_cal) * 1000)
+        
+        t_cal = time.time()
         local_th_rb  = calculate_threshold_robust(healthy_scores)
+        calib_times["Robust"].append((time.time() - t_cal) * 1000)
+        
+        t_cal = time.time()
         local_th_pc  = calculate_threshold_percentile(healthy_scores, q=99.7)
+        calib_times["Percentile"].append((time.time() - t_cal) * 1000)
+        
+        t_cal = time.time()
         local_th_pot = calculate_threshold_pot(healthy_scores, q=1e-3)
+        calib_times["POT"].append((time.time() - t_cal) * 1000)
+        
+        t_cal = time.time()
         local_th_gmm = calculate_threshold_gmm(bearing_scores)
+        calib_times["Self-Learn"].append((time.time() - t_cal) * 1000)
+        
+        t_cal = time.time()
         local_th_opt, _ = find_best_threshold(bearing_scores, bearing_labels)
+        calib_times["Optimal"].append((time.time() - t_cal) * 1000)
 
         # AUPRC cho riêng vòng bi
         if len(np.unique(bearing_labels)) > 1:
@@ -180,24 +264,89 @@ def evaluate_model(name, model, test_loader, config, device):
             if t_name in ["Robust", "POT", "Optimal"]:
                 print(f"     - {t_name:<7}: F1={m.get('F1',0):.4f} | FAR={m.get('FAR',0):.4f} | Thresh={t_val:.4f}")
 
-    test_latency_avg = np.mean(total_test_latencies) * 1000
+        # Lưu trữ dữ liệu của vòng bi cuối cùng để trực quan hóa
+        last_bearing_data = {
+            'bearing_name': bearing_name,
+            'scores': bearing_scores,
+            'labels': bearing_labels,
+            'th_3sigma': local_th_3s,
+            'th_robust': local_th_rb,
+            'th_pot': local_th_pot
+        }
+
+        # Tích hợp lưu trữ kết quả để so sánh 2x2
+        global comparison_results
+        if bearing_name not in comparison_results:
+            comparison_results[bearing_name] = {}
+        
+        file_scores = {}
+        for i_score, score in enumerate(bearing_scores):
+            f_idx = ds.samples[i_score][0]
+            if f_idx not in file_scores:
+                file_scores[f_idx] = []
+            file_scores[f_idx].append(score)
+            
+        indices = sorted(file_scores.keys())
+        mse_vals = [np.mean(file_scores[f_idx]) for f_idx in indices]
+        rms_vals = [ds.file_rms[ds.files[f_idx]] for f_idx in indices]
+        
+        cache_key = f"_kurtosis_cache_{bearing_name}"
+        if cache_key not in globals():
+            globals()[cache_key] = {}
+        kurt_cache = globals()[cache_key]
+        
+        kurt_vals = []
+        for f_idx in indices:
+            if f_idx not in kurt_cache:
+                f_path = os.path.join(ds.data_dir, ds.files[f_idx])
+                signal_data = torch.load(f_path, map_location='cpu', weights_only=True)
+                mean_sig = signal_data.mean(dim=-1, keepdim=True)
+                std_sig = signal_data.std(dim=-1, keepdim=True)
+                z_sig = (signal_data - mean_sig) / (std_sig + 1e-8)
+                kurt_cache[f_idx] = torch.mean(z_sig**4, dim=-1).mean().item()
+            kurt_vals.append(kurt_cache[f_idx])
+            
+        comparison_results[bearing_name][name] = {
+            'mse': mse_vals,
+            'indices': indices,
+            'rms': rms_vals,
+            'kurtosis': kurt_vals
+        }
+
+    # Tính toán trung bình các chỉ số thời gian
+    avg_transfer_lat = float(np.mean(transfer_latencies))
+    avg_inf_lat = float(np.mean(inf_latencies))
+    avg_scoring_lat = float(np.mean(scoring_latencies))
+    avg_decision_lat = float(np.mean(decision_latencies))
+    avg_total_eval_lat = float(np.mean(total_eval_latencies))
+    
+    avg_calib_times = {k: float(np.mean(v)) for k, v in calib_times.items()}
     
     avg_mae = np.mean(macro_forecasting["MAE"])
     avg_mse = np.mean(macro_forecasting["MSE"])
     avg_rmse = np.mean(macro_forecasting["RMSE"])
     avg_mape = np.mean(macro_forecasting["MAPE"])
 
-    print(f"\n============================================================")
+    # Tính toán bộ nhớ GPU đỉnh sử dụng suốt phiên đánh giá
+    peak_vram_mb = float(torch.cuda.max_memory_allocated(device) / (1024 ** 2)) if device.type == 'cuda' else 0.0
+
+    print("\n" + "=" * 60)
     print(f">>> MACRO-AVERAGE PERFORMANCE ({len(test_datasets)} Bearings)")
     print(f"   [Forecasting Metrics] > MAE: {avg_mae:.6f} | MSE: {avg_mse:.6f} | RMSE: {avg_rmse:.6f} | MAPE: {avg_mape:.4f}%")
-    for t_name in macro_metrics.keys():
-        avg_f1 = np.mean(macro_metrics[t_name]["F1"])
-        avg_far = np.mean(macro_metrics[t_name]["FAR"])
-        avg_auc = np.mean(macro_metrics[t_name]["AUC"])
-        avg_auprc = np.mean(macro_metrics[t_name]["AUPRC"])
-        print(f"   [{t_name:<10}] > F1: {avg_f1:.4f} | FAR: {avg_far:.4f} | AUC: {avg_auc:.4f} | AUPRC: {avg_auprc:.4f}")
-    print(f"   > Avg Latency: {test_latency_avg:.4f} ms/sample")
-    print(f"============================================================")
+    if device.type == 'cuda':
+        print(f"   [Hardware Metrics]    > Peak GPU VRAM: {peak_vram_mb:.1f} MB")
+    print("-" * 60)
+    print("   [Real-time Evaluation Latency Breakdown (per sample)]:")
+    print(f"     * Data Transfer (CPU->GPU): {avg_transfer_lat:.4f} ms")
+    print(f"     * Model Inference (Forward): {avg_inf_lat:.4f} ms")
+    print(f"     * Anomaly Scoring:           {avg_scoring_lat:.4f} ms")
+    print(f"     * Decision (Threshold Cmp):  {avg_decision_lat:.4f} ms")
+    print(f"     * TOTAL REAL LATENCY:        {avg_total_eval_lat:.4f} ms/sample")
+    print("-" * 60)
+    print("   [Threshold Calibration Overhead (per bearing)]:")
+    for k, v in avg_calib_times.items():
+        print(f"     * {k:<12}: {v:.4f} ms")
+    print("=" * 60)
 
     return {
         'name': name,
@@ -207,11 +356,21 @@ def evaluate_model(name, model, test_loader, config, device):
         'auc': float(np.mean(macro_metrics["POT"]["AUC"])),
         'far_pot': float(np.mean(macro_metrics["POT"]["FAR"])),
         'auprc': float(np.mean(macro_metrics["POT"]["AUPRC"])),
-        'latency': float(test_latency_avg),
+        'latency': float(avg_total_eval_lat),
         'mae': float(avg_mae),
         'mse': float(avg_mse),
         'rmse': float(avg_rmse),
-        'mape': float(avg_mape)
+        'mape': float(avg_mape),
+        'last_bearing': last_bearing_data,
+        'peak_vram_mb': peak_vram_mb,
+        'latency_breakdown': {
+            'data_transfer': avg_transfer_lat,
+            'inference': avg_inf_lat,
+            'scoring': avg_scoring_lat,
+            'decision': avg_decision_lat,
+            'total': avg_total_eval_lat
+        },
+        'calib_latencies': avg_calib_times
     }
 
 def main():
@@ -388,6 +547,14 @@ def main():
         print(f"Loading weights from {args.model_path}...")
         model.load_state_dict(torch.load(args.model_path, map_location=device, weights_only=True))
         evaluate_model(args.model_type, model, test_loader, config, device)
+
+    # Save comparison results for visualization
+    if comparison_results:
+        results_dir = os.path.join(project_root, "results")
+        os.makedirs(results_dir, exist_ok=True)
+        save_path = os.path.join(results_dir, f"eval_comparison_results_{config_name}.pth")
+        torch.save(comparison_results, save_path)
+        print(f"\n[Info] Saved comparison results to {save_path}")
 
 if __name__ == "__main__":
     main()

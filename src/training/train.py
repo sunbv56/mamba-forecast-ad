@@ -24,7 +24,7 @@ from src.models.baselines.tcn import TCNForecaster
 from src.models.baselines.modern_tcn import ModernTCNForecaster
 from src.models.baselines.transformer_small import PositionalEncoding
 from src.models.baselines.patch_models import PatchTST, PatchLSTM
-from src.models.mamba import HybridMambaCNN, MambaTS, MambaTSOfficial, MambaTSConfig
+from src.models.mamba import HybridMambaCNN, MambaTS, MambaTSOfficial, MambaTSConfig, SimpleMamba
 from src.evaluation.anomaly_scorer import calculate_anomaly_score
 
 def count_parameters(model):
@@ -97,6 +97,37 @@ def find_closest_patchtst(target, lookback, patch_size, stride, horizon):
             break
     return best_dim, best_params
 
+def find_closest_simple_mamba(target, lookback, patch_size, stride, horizon, mamba_n_layer=4, mamba_d_state=16, mamba_d_conv=4, mamba_expand=2, mamba_version=1):
+    best_dim = 8
+    best_params = 0
+    min_diff = float('inf')
+    for d in range(8, 1024, 2):
+        model = SimpleMamba({
+            'model': {
+                'mamba_version': mamba_version,
+                'mamba_d_model': d,
+                'mamba_n_layer': mamba_n_layer,
+                'mamba_d_state': mamba_d_state,
+                'mamba_d_conv': mamba_d_conv,
+                'mamba_expand': mamba_expand,
+                'forecast_len': horizon,
+                'patch_size': patch_size,
+                'stride': stride,
+                'in_channels': 2,
+                'lookback': lookback,
+            },
+            'data': {'patch_size': patch_size, 'stride': stride, 'lookback': lookback}
+        })
+        p = count_parameters(model)
+        diff = abs(p - target)
+        if diff < min_diff:
+            min_diff = diff
+            best_dim = d
+            best_params = p
+        if p > target and diff > min_diff:
+            break
+    return best_dim, best_params
+
 from src.evaluation.metrics import calculate_threshold_3sigma, calculate_threshold_robust, calculate_threshold_percentile, calculate_threshold_gmm, find_best_threshold, calculate_metrics, calculate_threshold_pot
 
 # --- Configuration Flags ---
@@ -140,6 +171,8 @@ class EarlyStopping:
 def train_one_model(name, model, train_loader, val_loader, test_loader, config, device, config_name="default"):
     print(f"\n>>> Training {name} (Config: {config_name})...")
     model.to(device)
+    if device.type == 'cuda':
+        torch.cuda.reset_peak_memory_stats(device)
     
     lr = float(config['training'].get('learning_rate', 0.001))
     epochs = int(config['training'].get('epochs', 1))
@@ -237,6 +270,10 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         avg_val_loss = val_loss / len(val_loader)
         current_lr = scheduler.get_last_lr()[0]
         print(f"Epoch [{epoch}/{epochs}] - Val Loss: {avg_val_loss:.6f} | LR: {current_lr:.2e}")
+        if device.type == 'cuda':
+            allocated = torch.cuda.memory_allocated(device) / (1024 ** 2)
+            reserved = torch.cuda.memory_reserved(device) / (1024 ** 2)
+            print(f"Epoch [{epoch}/{epochs}] - VRAM Allocated: {allocated:.1f} MB | VRAM Reserved: {reserved:.1f} MB")
         
         scheduler.step()
         early_stopping(avg_val_loss, model)
@@ -246,6 +283,9 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
             
     train_duration = time.time() - start_train
     print(f"Training took {train_duration:.2f} seconds")
+    if device.type == 'cuda':
+        peak_vram = torch.cuda.max_memory_allocated(device) / (1024 ** 2)
+        print(f"Peak GPU VRAM during training: {peak_vram:.1f} MB")
 
     # Load the best model weights
     print(f"Loading best model from {best_model_path}...")
@@ -447,7 +487,8 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
         'far_rb': float(np.mean(macro_metrics["Robust"]["FAR"])),
         'auprc': float(np.mean(macro_metrics["Robust"]["AUPRC"])),
         'latency': float(test_latency_avg),
-        'train_duration': float(train_duration)
+        'train_duration': float(train_duration),
+        'peak_vram_mb': float(torch.cuda.max_memory_allocated(device) / (1024 ** 2)) if device.type == 'cuda' else 0.0
     }
 
     # Best model is already saved by EarlyStopping, so we don't need to save it again here
@@ -566,17 +607,29 @@ def main():
     mamba_params = count_parameters(mamba_model)
 
     auto_scale = config.get('model', {}).get('auto_scale_baselines', False)
+    sm_n_layer = config['model'].get('mamba_n_layer', 4)
+    sm_d_state = config['model'].get('mamba_d_state', 16)
+    sm_d_conv = config['model'].get('mamba_d_conv', 4)
+    sm_expand = config['model'].get('mamba_expand', 2)
+    sm_version = config['model'].get('mamba_version', 1)
+
     if auto_scale:
         print(f"\n[AUTO-SCALE] Đang tự động điều chỉnh siêu tham số các Baselines khớp Ngân sách Tham số của Mamba1-Hybrid (~{mamba_params:,} params)...")
         lstm_dim, lstm_p = find_closest_lstm(mamba_params, horizon)
         pl_dim, pl_p = find_closest_patch_lstm(mamba_params, patch_size, patch_stride, horizon)
         tcn_dim, tcn_p = find_closest_modern_tcn(mamba_params, horizon)
         pt_dim, pt_p = find_closest_patchtst(mamba_params, lookback, 16, 8, horizon)
+        sm_dim, sm_p = find_closest_simple_mamba(
+            mamba_params, lookback, patch_size, patch_stride, horizon,
+            mamba_n_layer=sm_n_layer, mamba_d_state=sm_d_state,
+            mamba_d_conv=sm_d_conv, mamba_expand=sm_expand, mamba_version=sm_version
+        )
         
         print(f"  -> LSTM: hidden_dim={lstm_dim} ({lstm_p:,} params)")
         print(f"  -> PatchLSTM: d_model={pl_dim} ({pl_p:,} params)")
         print(f"  -> ModernTCN: d_model={tcn_dim} ({tcn_p:,} params)")
         print(f"  -> PatchTST: d_model={pt_dim} ({pt_p:,} params)")
+        print(f"  -> SimpleMamba: d_model={sm_dim} ({sm_p:,} params)")
         
         lstm_forecaster = LSTMForecaster(input_dim=2, hidden_dim=lstm_dim, num_layers=3, horizon=horizon)
         patch_lstm = PatchLSTM(in_channels=2, patch_size=64, stride=64, d_model=pl_dim, num_layers=3, horizon=horizon)
@@ -586,18 +639,53 @@ def main():
         if pt_dim % 4 != 0:
             nhead = 2 if pt_dim % 2 == 0 else 1
         patchtst = PatchTST(in_channels=2, lookback=lookback, patch_size=16, stride=8, d_model=pt_dim, nhead=nhead, num_layers=4, horizon=horizon)
+        
+        simple_mamba = SimpleMamba({
+            'model': {
+                'mamba_version': sm_version,
+                'mamba_d_model': sm_dim,
+                'mamba_n_layer': sm_n_layer,
+                'mamba_d_state': sm_d_state,
+                'mamba_d_conv': sm_d_conv,
+                'mamba_expand': sm_expand,
+                'forecast_len': horizon,
+                'patch_size': patch_size,
+                'stride': patch_stride,
+                'in_channels': 2,
+                'lookback': lookback,
+            },
+            'data': {'patch_size': patch_size, 'stride': patch_stride, 'lookback': lookback}
+        })
     else:
         print("\n[AUTO-SCALE] Sử dụng cấu hình Baselines mặc định...")
         lstm_forecaster = LSTMForecaster(input_dim=2, hidden_dim=140, num_layers=3, horizon=horizon)
         patch_lstm = PatchLSTM(in_channels=2, patch_size=64, stride=64, d_model=120, num_layers=3, horizon=horizon)
         modern_tcn = ModernTCNForecaster(input_dim=2, d_model=160, num_layers=3, kernel_size=17, horizon=horizon)
         patchtst = PatchTST(in_channels=2, lookback=lookback, patch_size=16, stride=8, d_model=128, nhead=16, num_layers=3, horizon=horizon)
+        
+        simple_mamba = SimpleMamba({
+            'model': {
+                'mamba_version': sm_version,
+                'mamba_d_model': config['model'].get('mamba_d_model', 64),
+                'mamba_n_layer': sm_n_layer,
+                'mamba_d_state': sm_d_state,
+                'mamba_d_conv': sm_d_conv,
+                'mamba_expand': sm_expand,
+                'forecast_len': horizon,
+                'patch_size': patch_size,
+                'stride': patch_stride,
+                'in_channels': 2,
+                'lookback': lookback,
+            },
+            'data': {'patch_size': patch_size, 'stride': patch_stride, 'lookback': lookback}
+        })
 
     all_models = {
         "LSTM": lstm_forecaster,
         "PatchLSTM": patch_lstm,
         "ModernTCN": modern_tcn,
         "PatchTST": patchtst,
+        "SimpleMamba": simple_mamba,
         "Mamba1-Hybrid": mamba_model
     }
         # "MambaTS-Paper": MambaTS(

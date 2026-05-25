@@ -192,3 +192,7 @@ karpathy_skills/
 # Internal Reports and Diaries
 reports/
 *.pdf
+
+# Migrated nested repository
+Hydrid-Mamba-for-Predictive-Bearing-Fault/
+
