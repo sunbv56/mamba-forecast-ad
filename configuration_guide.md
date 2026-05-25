@@ -38,9 +38,7 @@ model:
   bidirectional: false
   decomp_kernel: 25 
   auto_scale_baselines: true
-  use_revin: false
   use_decomposition: true
-  use_multiscale: false
   use_stats: true
 
 training:
@@ -72,10 +70,10 @@ training:
 
 - **`auto_scale_baselines` (`true`)**: Tự động co giãn tham số baselines.
   - *Ý nghĩa*: Khi đặt là `true`, script huấn luyện sẽ tự động tìm kiếm và điều chỉnh số chiều ẩn (`hidden_dim`, `d_model`) của các mô hình đối chứng (LSTM, PatchLSTM, ModernTCN, PatchTST) sao cho tổng số lượng tham số học tập của chúng tương đương với mô hình lai Mamba-CNN (~200k - 300k tham số). Điều này đảm bảo sự **so sánh công bằng tuyệt đối** về dung lượng tính toán (Fair Parameter Budget).
-- **`use_revin: false` (Quyết định tối ưu cốt lõi)**: Vô hiệu hóa chuẩn hóa nghịch đảo cá thể (Reversible Instance Normalization).
-  - *Phân tích khoa học*: RevIN thực hiện chuẩn hóa z-score cục bộ trên từng cửa sổ dữ liệu. Khi vòng bi đi vào giai đoạn hỏng hóc nặng, biên độ tín hiệu rung (RMS) tăng vọt. Nếu bật RevIN, thuật toán sẽ co kéo biên độ cửa sổ lỗi về mức chuẩn hóa thông thường, làm mất đi sự khác biệt biên độ so với giai đoạn khỏe mạnh. Kết quả là sai số dự báo (Anomaly Score) không tăng ở giai đoạn cuối. **Bắt buộc phải tắt RevIN để mô hình nhạy bén với sự suy thoái biên độ.**
-- **`use_multiscale: false`**: Vô hiệu hóa phân nhánh đa tỷ xích (Multi-scale Patching).
-  - *Lý do*: Thử nghiệm cho thấy phân tích đa tỷ xích làm tăng nguy cơ overfitting trên tập dữ liệu nhỏ và làm tăng đáng kể độ trễ tính toán không cần thiết.
+- **Loại bỏ RevIN và Chuẩn hóa z-score tức thời (Instance Normalization)**:
+  - *Phân tích khoa học*: RevIN và chuẩn hóa z-score trên từng cửa sổ (instance normalization) **đã bị xóa bỏ hoàn toàn khỏi mã nguồn** thay vì duy trì dưới dạng cấu hình bật/tắt. Cơ sở khoa học là các cơ chế chuẩn hóa này thực hiện trừ đi trung bình (mean) và chia cho độ lệch chuẩn (std) cục bộ của từng cửa sổ. Khi vòng bi bước vào giai đoạn suy thoái nghiêm trọng, biên độ rung thực tế (RMS) tăng vọt. Việc chuẩn hóa tức thời vô tình co kéo biên độ lỗi về mức bình thường giống hệt chuỗi khỏe mạnh, triệt tiêu tín hiệu suy thoái và làm sai số dự báo (Anomaly Score) không tăng ở cuối đời máy. **Biên độ vật lý tuyệt đối phải được bảo toàn nguyên vẹn.**
+- **Loại bỏ phân nhánh đa tỷ xích (Multi-scale Patching)**:
+  - *Lý do*: Cơ chế đa tỷ xích đã bị loại bỏ khỏi kiến trúc mô hình vì các thực nghiệm thực tế cho thấy nó làm tăng nguy cơ quá khớp (overfitting) trên tập dữ liệu kích thước trung bình và tăng đáng kể chi phí/độ trễ tính toán không cần thiết.
 - **`use_stats: true` (Stats Head - Hướng dẫn vật lý)**: Kích hoạt đầu Stats Head.
   - *Ý nghĩa*: Stats Head trích xuất 8 đặc trưng thống kê miền thời gian (RMS, Kurtosis, Crest Factor, Shape Factor, Impulse Factor, Margin Factor, Peak-to-Peak, Variance) từ cửa sổ lookback và đưa vào làm đặc trưng bổ trợ. Điều này giúp hướng dẫn mô hình bằng tri thức vật lý cơ học dòng máy, cải thiện đáng kể độ chính xác so với việc chỉ học chuỗi thời gian thuần túy.
 
