@@ -15,7 +15,7 @@ class BearingDataset(Dataset):
         horizon=64,
         stride=512,
         split='train',
-        normalize=True,
+        normalize=False,
         file_sample_ratio=1,
         fault_rms_factor=3.0,
         train_rms_pct=40,
@@ -26,6 +26,7 @@ class BearingDataset(Dataset):
         highpass_freq=0,
         sampling_rate=128000,
         label_strategy='rms',
+        manual_fault_start=None,
         **kwargs
     ):
         """
@@ -47,6 +48,7 @@ class BearingDataset(Dataset):
         self.highpass_freq   = highpass_freq
         self.sampling_rate   = sampling_rate
         self.label_strategy  = label_strategy
+        self.manual_fault_start = manual_fault_start
 
         if not os.path.exists(data_dir):
             raise FileNotFoundError(f"Data directory not found: {data_dir}")
@@ -243,6 +245,35 @@ class BearingDataset(Dataset):
         if self.label_strategy == '3sigma':
             threshold = self.healthy_rms_mean + 3.0 * self.healthy_rms_std
             label = 1 if current_file_rms > threshold else 0
+        elif self.label_strategy == 'manual':
+            label = 0
+            if self.manual_fault_start is not None:
+                bearing_name = os.path.basename(self.data_dir)
+                
+                # Xác định điểm bắt đầu lỗi cho vòng bi này
+                if isinstance(self.manual_fault_start, dict):
+                    start_val = self.manual_fault_start.get(bearing_name, None)
+                else:
+                    start_val = self.manual_fault_start
+                
+                if start_val is not None:
+                    if isinstance(start_val, str):
+                        # So sánh tên file (tìm index hoặc so sánh chuỗi trực tiếp)
+                        if start_val in self.files:
+                            start_idx = self.files.index(start_val)
+                            label = 1 if f_idx >= start_idx else 0
+                        else:
+                            label = 1 if self.files[f_idx] >= start_val else 0
+                    elif isinstance(start_val, int):
+                        # So sánh chỉ số file
+                        label = 1 if f_idx >= start_val else 0
+                else:
+                    # Cảnh báo và fallback về rms nếu không tìm thấy cấu hình cho vòng bi này
+                    threshold = self.healthy_rms_baseline * self.fault_rms_factor
+                    label = 1 if current_file_rms > threshold else 0
+            else:
+                threshold = self.healthy_rms_baseline * self.fault_rms_factor
+                label = 1 if current_file_rms > threshold else 0
         else:
             threshold = self.healthy_rms_baseline * self.fault_rms_factor
             label = 1 if current_file_rms > threshold else 0

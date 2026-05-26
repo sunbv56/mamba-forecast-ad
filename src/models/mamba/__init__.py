@@ -4,7 +4,7 @@ from .cnn_patching import CNNPatchEmbedding
 from .fusion_head import FusionForecastHead
 from .mamba_ts import MambaTS
 from .mamba_ts_official import MambaTSOfficial, MambaTSConfig
-from .mamba_simple import SimpleMamba
+from .mamba_simple import SimpleMamba, SimpleMambaPatch
 
 __all__ = [
     'HybridMambaCNN', 
@@ -14,6 +14,7 @@ __all__ = [
     'MambaTS',
     'MambaTSOfficial',
     'MambaTSConfig',
-    'SimpleMamba'
+    'SimpleMamba',
+    'SimpleMambaPatch'
 ]
 

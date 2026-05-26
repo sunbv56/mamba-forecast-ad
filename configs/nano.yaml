@@ -7,7 +7,18 @@ data:
   test_datasets: ["data/processed/B02", "data/processed/B03", "data/processed/B04", "data/processed/B05"]
   sampling_rate: 128000
   highpass_freq: 2000
-  label_strategy: 'rms' # 3sigma or rms
+  label_strategy: 'manual' # 3sigma, rms, or manual
+  manual_fault_start:
+    B01: 212
+    B02: 867
+    B03: 554
+    B04: 463
+    B05: 554
+    B08: 1213
+    B10: 2708
+    B11: 716
+    B12: 60
+    B17: 2187
   window_stride: 1024
   lookback: 4096
   horizon: 1024
@@ -15,8 +26,8 @@ data:
   train_ratio: 0.4
 
 model:
-  patch_size: 64  
-  patch_stride: 32
+  patch_size: 16  
+  patch_stride: 8
   trend_downsample: 64
   cnn_out_channels: 64
   mamba_d_model: 64

@@ -24,7 +24,7 @@ from src.models.baselines.tcn import TCNForecaster
 from src.models.baselines.modern_tcn import ModernTCNForecaster
 from src.models.baselines.transformer_small import PositionalEncoding
 from src.models.baselines.patch_models import PatchTST, PatchLSTM
-from src.models.mamba import HybridMambaCNN, MambaTS, MambaTSOfficial, MambaTSConfig, SimpleMamba
+from src.models.mamba import HybridMambaCNN, MambaTS, MambaTSOfficial, MambaTSConfig, SimpleMamba, SimpleMambaPatch
 from src.evaluation.anomaly_scorer import calculate_anomaly_score
 
 def count_parameters(model):
@@ -97,12 +97,12 @@ def find_closest_patchtst(target, lookback, patch_size, stride, horizon):
             break
     return best_dim, best_params
 
-def find_closest_simple_mamba(target, lookback, patch_size, stride, horizon, mamba_n_layer=4, mamba_d_state=16, mamba_d_conv=4, mamba_expand=2, mamba_version=1):
+def find_closest_simple_mamba_patch(target, lookback, patch_size, stride, horizon, mamba_n_layer=4, mamba_d_state=16, mamba_d_conv=4, mamba_expand=2, mamba_version=1):
     best_dim = 8
     best_params = 0
     min_diff = float('inf')
     for d in range(8, 1024, 2):
-        model = SimpleMamba({
+        model = SimpleMambaPatch({
             'model': {
                 'mamba_version': mamba_version,
                 'mamba_d_model': d,
@@ -117,6 +117,35 @@ def find_closest_simple_mamba(target, lookback, patch_size, stride, horizon, mam
                 'lookback': lookback,
             },
             'data': {'patch_size': patch_size, 'stride': stride, 'lookback': lookback}
+        })
+        p = count_parameters(model)
+        diff = abs(p - target)
+        if diff < min_diff:
+            min_diff = diff
+            best_dim = d
+            best_params = p
+        if p > target and diff > min_diff:
+            break
+    return best_dim, best_params
+
+def find_closest_simple_mamba(target, lookback, horizon, mamba_n_layer=4, mamba_d_state=16, mamba_d_conv=4, mamba_expand=2, mamba_version=1):
+    best_dim = 8
+    best_params = 0
+    min_diff = float('inf')
+    for d in range(8, 1024, 2):
+        model = SimpleMamba({
+            'model': {
+                'mamba_version': mamba_version,
+                'mamba_d_model': d,
+                'mamba_n_layer': mamba_n_layer,
+                'mamba_d_state': mamba_d_state,
+                'mamba_d_conv': mamba_d_conv,
+                'mamba_expand': mamba_expand,
+                'forecast_len': horizon,
+                'in_channels': 2,
+                'lookback': lookback,
+            },
+            'data': {'lookback': lookback}
         })
         p = count_parameters(model)
         diff = abs(p - target)
@@ -620,6 +649,11 @@ def main():
         tcn_dim, tcn_p = find_closest_modern_tcn(mamba_params, horizon)
         pt_dim, pt_p = find_closest_patchtst(mamba_params, lookback, 16, 8, horizon)
         sm_dim, sm_p = find_closest_simple_mamba(
+            mamba_params, lookback, horizon,
+            mamba_n_layer=sm_n_layer, mamba_d_state=sm_d_state,
+            mamba_d_conv=sm_d_conv, mamba_expand=sm_expand, mamba_version=sm_version
+        )
+        sm_patch_dim, sm_patch_p = find_closest_simple_mamba_patch(
             mamba_params, lookback, patch_size, patch_stride, horizon,
             mamba_n_layer=sm_n_layer, mamba_d_state=sm_d_state,
             mamba_d_conv=sm_d_conv, mamba_expand=sm_expand, mamba_version=sm_version
@@ -630,6 +664,7 @@ def main():
         print(f"  -> ModernTCN: d_model={tcn_dim} ({tcn_p:,} params)")
         print(f"  -> PatchTST: d_model={pt_dim} ({pt_p:,} params)")
         print(f"  -> SimpleMamba: d_model={sm_dim} ({sm_p:,} params)")
+        print(f"  -> SimpleMambaPatch: d_model={sm_patch_dim} ({sm_patch_p:,} params)")
         
         lstm_forecaster = LSTMForecaster(input_dim=2, hidden_dim=lstm_dim, num_layers=3, horizon=horizon)
         patch_lstm = PatchLSTM(in_channels=2, patch_size=64, stride=64, d_model=pl_dim, num_layers=3, horizon=horizon)
@@ -644,6 +679,21 @@ def main():
             'model': {
                 'mamba_version': sm_version,
                 'mamba_d_model': sm_dim,
+                'mamba_n_layer': sm_n_layer,
+                'mamba_d_state': sm_d_state,
+                'mamba_d_conv': sm_d_conv,
+                'mamba_expand': sm_expand,
+                'forecast_len': horizon,
+                'in_channels': 2,
+                'lookback': lookback,
+            },
+            'data': {'lookback': lookback}
+        })
+        
+        simple_mamba_patch = SimpleMambaPatch({
+            'model': {
+                'mamba_version': sm_version,
+                'mamba_d_model': sm_patch_dim,
                 'mamba_n_layer': sm_n_layer,
                 'mamba_d_state': sm_d_state,
                 'mamba_d_conv': sm_d_conv,
@@ -672,6 +722,21 @@ def main():
                 'mamba_d_conv': sm_d_conv,
                 'mamba_expand': sm_expand,
                 'forecast_len': horizon,
+                'in_channels': 2,
+                'lookback': lookback,
+            },
+            'data': {'lookback': lookback}
+        })
+        
+        simple_mamba_patch = SimpleMambaPatch({
+            'model': {
+                'mamba_version': sm_version,
+                'mamba_d_model': config['model'].get('mamba_d_model', 64),
+                'mamba_n_layer': sm_n_layer,
+                'mamba_d_state': sm_d_state,
+                'mamba_d_conv': sm_d_conv,
+                'mamba_expand': sm_expand,
+                'forecast_len': horizon,
                 'patch_size': patch_size,
                 'stride': patch_stride,
                 'in_channels': 2,
@@ -679,13 +744,14 @@ def main():
             },
             'data': {'patch_size': patch_size, 'stride': patch_stride, 'lookback': lookback}
         })
-
+ 
     all_models = {
         "LSTM": lstm_forecaster,
         "PatchLSTM": patch_lstm,
         "ModernTCN": modern_tcn,
         "PatchTST": patchtst,
         "SimpleMamba": simple_mamba,
+        "SimpleMambaPatch": simple_mamba_patch,
         "Mamba1-Hybrid": mamba_model
     }
         # "MambaTS-Paper": MambaTS(
