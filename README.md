@@ -138,12 +138,12 @@ pip install -r requirements.txt
 
 ### 2. Run Training
 ```bash
-python src/training/train.py --config configs/mamba_ts.yaml --model Mamba1-Hybrid
+python src/training/train.py --config configs/default.yaml --model Mamba1-Hybrid
 ```
 
 ### 3. Run Evaluation
 ```bash
-python src/training/eval.py --config configs/mamba_ts.yaml --model_type Mamba1-Hybrid --model_path results/models/mamba1_hybrid_best.pth
+python src/training/eval.py --config configs/default.yaml --model_type Mamba1-Hybrid --model_path results/models/mamba1_hybrid_best.pth
 ```
 
 For detailed execution and YAML descriptions, please refer to the **[User & Run Guide](file:///f:/APPS_PJ/mamba-forecast-ad/docs/user_guide.md)**.
