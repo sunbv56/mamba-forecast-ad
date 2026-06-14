@@ -10,3 +10,5 @@ tqdm
 wandb
 scikit-learn
 matplotlib
+seaborn
+huggingface_hub
