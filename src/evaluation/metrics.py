@@ -2,7 +2,7 @@ import numpy as np
 from sklearn.metrics import f1_score, roc_auc_score, confusion_matrix
 from scipy.stats import genpareto
 
-def calculate_threshold_pot(scores, q=1e-3, init_level=0.98):
+def calculate_threshold_pot(scores, q=1e-3, init_level=0.95):
     """
     Tính ngưỡng Peak Over Threshold (POT) dựa trên Extreme Value Theory.
     Bổ sung clip outlier để tránh nhiễu tập train làm vọt ngưỡng.

@@ -42,26 +42,56 @@ class RevIN(nn.Module):
 
 class SeriesDecomposition(nn.Module):
     """
-    Series decomposition block: tách Trend và Seasonal/Residual.
-    Kernel lớn → Trend chậm (xu hướng mòn); Seasonal → dao động nhanh.
-    Inspired by DLinear / Autoformer.
+    EMA-based Series Decomposition (DMamba-style, arXiv:2602.09081).
+
+    X_trend[t] = α · X[t] + (1−α) · X_trend[t−1]
+    X_seasonal  = X − X_trend
+
+    α nhỏ (e.g. 0.1) → Trend chậm, Seasonal giữ nhiều biến động nhanh (phù hợp tín hiệu rung động vòng bi).
+    α được học tự động qua sigmoid khi learnable=True, tránh phải chọn decomp_kernel thủ công.
+
+    Ưu điểm so với AvgPool1d (Autoformer/DLinear):
+    - Không có "padding bias" tại biên chuỗi
+    - Không cần chọn kernel_size thủ công
+    - Tham số α được học cuối-đến-cuối cùng với toàn bộ model
     """
-    def __init__(self, kernel_size: int = 25):
+    def __init__(self, alpha: float = 0.1, learnable: bool = True):
         super().__init__()
-        # padding='same' equivalent: padding = kernel_size // 2
-        padding = kernel_size // 2
-        self.moving_avg = nn.AvgPool1d(kernel_size=kernel_size, stride=1, padding=padding)
+        if learnable:
+            # Dùng logit(alpha) để sigmoid-bounded trong (0, 1) khi tối ưu hóa
+            import math
+            init_logit = math.log(alpha / (1.0 - alpha))
+            self._alpha = nn.Parameter(torch.tensor(init_logit))
+        else:
+            self.register_buffer('_alpha', torch.tensor(alpha).clamp(0.01, 0.99))
+        self.learnable = learnable
+
+    @property
+    def alpha(self):
+        if self.learnable:
+            return torch.sigmoid(self._alpha)
+        return self._alpha
 
     def forward(self, x):
         """
         x      : (Batch, Channels, Length)
         returns: seasonal (B, C, L), trend (B, C, L)
+
+        [FIX] Dùng list + torch.stack thay vì ghi in-place vào tensor
+        để tránh RuntimeError: inplace operation breaks autograd graph.
         """
-        trend = self.moving_avg(x)
-        if trend.shape[-1] != x.shape[-1]:
-            trend = nn.functional.interpolate(
-                trend, size=x.shape[-1], mode='linear', align_corners=False
-            )
+        B, C, L = x.shape
+        alpha = self.alpha
+
+        # Tích luỹ từng bước EMA vào list → không có in-place write nào
+        trend_steps = [x[:, :, 0]]          # (B, C) tại t=0
+        for t in range(1, L):
+            # trend[t] = α·x[t] + (1−α)·trend[t−1]  — pure functional, no inplace
+            trend_t = alpha * x[:, :, t] + (1.0 - alpha) * trend_steps[-1]
+            trend_steps.append(trend_t)
+
+        # Stack list of (B, C) → (B, C, L)
+        trend = torch.stack(trend_steps, dim=-1)
         seasonal = x - trend
         return seasonal, trend
 

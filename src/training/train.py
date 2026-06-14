@@ -206,8 +206,17 @@ def train_one_model(name, model, train_loader, val_loader, test_loader, config, 
     lr = float(config['training'].get('learning_rate', 0.001))
     epochs = int(config['training'].get('epochs', 1))
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=1e-4)
-    # HuberLoss: robust hơn MSELoss với tín hiệu rung động có outlier cao
-    criterion = nn.HuberLoss(delta=1.0)
+    
+    # [FIX] Align loss function with Evaluation Metric (MSE) as in DMamba Paper
+    # Default to MSE Loss, but allow configuring Huber Loss if needed for outlier resilience.
+    loss_type = config['training'].get('loss_type', 'huber')
+    if loss_type == 'huber':
+        criterion = nn.HuberLoss(delta=1.0)
+    elif loss_type == 'mse':
+        criterion = nn.MSELoss()
+    else:
+        raise ValueError(f"Unknown loss type: {loss_type}. Choose 'mse' or 'huber'.")
+        
     # CosineAnnealingLR: giảm LR từ từ theo hình cos, giúp Mamba thoát local minima
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs, eta_min=lr * 1e-2)
     scaler = torch.amp.GradScaler('cuda') if device.type == 'cuda' else None
@@ -569,7 +578,7 @@ def main():
 
     window_stride = config['data'].get('window_stride', 1024)
     lookback = config['data'].get('lookback', 4096)
-    horizon = config['data'].get('horizon', 1024)
+    horizon = config['data'].get('horizon', 512)
     sampling_rate = config['data'].get('sampling_rate', 128000)
     
     # Model patching params
@@ -621,9 +630,10 @@ def main():
             'stride': patch_stride,
             'trend_downsample': trend_downsample,
             'in_channels': 2, 'lookback': lookback,
-            'decomp_kernel': config['model'].get('decomp_kernel', 25), 
-            'use_multiscale': config['model'].get('use_multiscale', True),
-            'use_revin': config['model'].get('use_revin', True),
+            'decomp_alpha':    config['model'].get('decomp_alpha', 0.1),
+            'decomp_learnable': config['model'].get('decomp_learnable', True),
+            'use_multiscale': config['model'].get('use_multiscale', False),
+            'use_revin': config['model'].get('use_revin', False),
             'use_decomposition': config['model'].get('use_decomposition', True),
             'use_stats': config['model'].get('use_stats', True),
         },

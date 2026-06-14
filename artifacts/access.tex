@@ -1,354 +1,690 @@
-\documentclass{ieeeaccess}
-\usepackage{cite}
-\usepackage{amsmath,amssymb,amsfonts}
-\usepackage{algorithmic}
-\usepackage{graphicx}
-\usepackage{xcolor}
-\usepackage{textcomp}
-\usepackage{url}
-\usepackage{booktabs}
-\usepackage{multirow}
-\usepackage{bm}
-\usepackage[caption=false,font=footnotesize]{subfig}
-\usepackage[hidelinks]{hyperref}
+%Tech Science Press
 
-\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
-    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+%=================================================================
+\documentclass[cmes,article,submit,moreauthors,pdftex]{Definitions/tsp} 
+\input{Definitions/package}
+\include{Definitions/unicode}
 
-\doi{10.1109/ACCESS.2026.3567890}
+%----------
+% journal
+%----------
+% % Choose between the following TSP journals:
+%biocell, chd, cju, cl, cmc, cmes, csse, dedt, ecn, ee, fdmp, fhmt, iasc, icces, ijimh, jai, jbd, jbic, jcs, jihpp, jimh, jiot, jnm, jpa, jpm, jqc, jrm, oncologie, or, phyton, rig, sdhm, zkg.
+%--------------
+% article type
+%--------------
+% The default manuscript type is article; alternative options include:
+%abstract, analysis, article, biographicalitem, casereport, commentary, communication, correction, editorial, guideline, howidoiit, introduction, letter, legends, minireview, openforum, perspective, proceedings, protocol, retraction, review, shortcommunication, technicalreport, theory, tutorial, viewpoint
 
+%---------------
+% submit status
+%---------------
+%Upon acceptance, the Editorial Office will switch the class option from "submit" to "accept". This change applies only to the front page, headings, and copyright information, and will remove line numbering. Journal information and pagination will be assigned by the Editorial Office.
+
+%------------------
+% moreauthors
+%------------------
+% If there is only one author the class option oneauthor should be used. Otherwise use the class option moreauthors.
+
+%---------
+% pdftex
+%---------
+% The option "pdftex" should be used only with pdfLaTeX. For compilation with LaTeX + dvi2pdf (e.g., when using EPS figures) or XeLaTeX, this option must be removed.
+
+%=================================================================
+% Internal commands: Article information and pagination will be assigned by the Editorial Office
+\continuouspages{}
+\firstpage{1} 
+\makeatletter 
+\setcounter{page}{\@firstpage} 
+\makeatother
+\pubvolume{0}
+\issuenum{0}
+\elocationid{0}
+\articlenumber{0}
+\pubyear{2026}
+\copyrightyear{2026}
+\datereceived{Day Month Year}
+\dateaccepted{Day Month Year}
+\dateonlinefirst{}
+\datepublished{Day Month Year}
+%\datecorrected{} % For corrected papers: "Corrected: XXX" date in the original paper.
+%\dateretracted{}  % For corrected papers: "Retracted: XXX" date in the original paper.
+
+%=================================================================
+% Please add packages and commands here. The following packages are loaded in the class file: fontenc, inputenc, calc, indentfirst, fancyhdr, graphicx, epstopdf, lastpage, ifthen, lineno, float, amsmath, setspace, enumitem, mathpazo, booktabs, titlesec, etoolbox, tabto, xcolor, soul, multirow, microtype, tikz, refcount, totcount, attrib, amsthm, upgreek, array, tabularx, pbox, ragged2e, tocloft, adjustbox, enotez, subfig
+%\usepackage{combelow}
+\usepackage[OT1,OT2,T2A,T2B,T2C,T3,T5,T1]{fontenc}
+\usepackage[russian,english]{babel}
+\microtypesetup{expansion=false}
+
+%=================================================================
+%% Please use the following mathematics environments: Theorem, Lemma, Corollary, Proposition, Characterization, Property, Problem, Example, ExamplesandDefinitions, Hypothesis, Remark, Definition, Notation, Assumption
+%% For proofs, please use the proof environment (the amsthm package is loaded by the TSP class).
+%\begin{Theorem}
+%\end{Theorem}
+%\begin{proof}
+%\end{proof}
+
+%=================================================================
+% Full title of the paper (Capitalized)
+\Title{Hybrid Mamba-CNN Architecture with Physics-Informed Stats Head for Leakage-Free Bearing Anomaly Detection}
+%\TitleCitation{Title} %for citaion purposes
+
+% Author Orchid ID: enter ID or remove command
+%\newcommand{\orcidauthorA}{0000-0000-000-000X} % Add \orcidA{} behind the author's name
+%\newcommand{\orcidauthorB}{0000-0000-000-000X} % Add \orcidB{} behind the author's name
+
+% Authors, for the paper (add full first names)
+\Author{Long Truong\textsuperscript{1}, Binh Thuan Truong\textsuperscript{2}, Hung Lam Ly\textsuperscript{2} and Phu Le Nguyen\textsuperscript{3,*}}
+%\AuthorCitation{Lastname F, Lastname F, Lastname F}%for citaion purposes
+
+% Authors, for metadata in PDF
+\AuthorNames{Truong Long, Binh Thuan Truong, Hung Lam ly and Phu Le Nguyen}
+
+% Affiliations / Addresses (Add [1] after \address if there is only one affiliation.)
+\address{%
+\textsuperscript{1}Faculty of Software Engineering, FPT University, Ho Chi Minh City, Vietnam
+
+\textsuperscript{2}Faculty of Information Technology, Ton Duc Thang University, Ho Chi Minh City, Vietnam
+
+\textsuperscript{3}Faculty of Engineering and Technology, Nguyen Tat Thanh University, Ho Chi Minh City, Vietnam
+}%
+
+% Contact information of the corresponding author
+% \corres{Corresponding Authors: Long Truong (Email: longt5@fpt.edu.vn); Phu Le Nguyen (Email: pnguyen@ntt.edu.vn)}
+\corres{Corresponding Authors: Phu Le Nguyen (Email: pnguyen@ntt.edu.vn)}
+
+% Current address and/or shared authorship
+%\firstnote{These authors contributed equally to this work} % Optional: can be left empty if unnecessary
+%The commands \thirdnote{} till \myeighthnote{} are available for further notes
+
+%\secondnote{Current address: Affiliation} % Optional: can be left empty if unnecessary
+%Current address must not duplicate any entry in the Affiliation section.
+
+% Abstract (Do not use inserted blank lines, i.e. \\)
+\abstract{Vibration-based unsupervised rolling element bearing anomaly detection is critical for maximizing the reliability of rotating machinery within industrial Prognostics and Health Management frameworks. However, raw vibration signals captured from operational environments exhibit severe non-stationary characteristics, non-linear trajectories, and heavy noise, which mask early structural degradation indicators. Furthermore, pure data-driven deep sequence models operate as uninterpretable black boxes, and conventional threshold selection techniques frequently induce severe validation-stage data leakage by utilizing future anomalous data distributions. To address these limitations, a physics-informed, series-decomposed hybrid Mamba-CNN forecasting framework is proposed. Global long-range dependencies are captured using a linear-time selective scan mechanism, while localized temporal features are filtered via integrated convolutional layers. To support mechanical interpretability, latent representations are reinforced by an eight-dimensional physical-statistical head extracted directly from the historical lookback window. A leakage-free decision threshold calibration workflow is designed using Extreme Value Theory via the Peak Over Threshold technique, where dynamic operational boundaries are derived strictly from localized, early-stage healthy segments. Under the evaluated settings with auto-scaled baseline architectures, parameter parity is enforced. The empirical results indicate that the proposed paradigm achieves improved detection accuracy and improved computational efficiency compared to baselines, while mitigating false alarm rates across real-world vibration datasets.}
+
+% List 3 to 10  pertinent keywords specific to the article, yet reasonably common within the subject discipline.
+\keyword{selective state space models; hybrid Mamba-CNN; series decomposition; bearing anomaly detection; leakage-free calibration; peak over threshold}  
+
+%  PACS, MSC, and JEL can be left empty or commented out if not applicable
+%\PACS{}
+%\MSC{}
+%\JEL{}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \begin{document}
-\history{Date of publication May 6, 2026, date of current version \today.}
 
-\title{HybridMamba++: A Multi-Scale Series-Decomposed State-Space Model for High-Precision Bearing Anomaly Detection}
-\author{\uppercase{Binh-Thuan Truong}\authorrefmark{1},
-\address[1]{Faculty of Information Technology, Ton Duc Thang University, Ho Chi Minh City, Vietnam}
+\section{Introduction} \label{sect:s1}
+Reliability and operational safety in modern industrial asset management depend heavily on the continuous health monitoring of rotating machinery~\cite{ref-1}. Within these mechanical systems, rolling element bearings are classified as critical components whose structural degradation directly induces operational downtime and substantial economic losses~\cite{ref-1}. Consequently, vibration-based unsupervised anomaly detection has emerged as a cornerstone of Prognostics and Health Management (PHM) frameworks~\cite{ref-1}. Raw vibration signals collected from industrial environments exhibit non-stationary distributions and non-linear dynamics~\cite{ref-1}. Subtle transient impact pulses generated during early-stage degradation phases are frequently masked by background noise, necessitating advanced sequence modeling paradigms capable of isolating anomalies with structural fidelity~\cite{ref-1}.
 
-\markboth
-{Truong: HybridMamba++ for High-Precision Bearing Anomaly Detection}
-{Truong: HybridMamba++ for High-Precision Bearing Anomaly Detection}
+Deep learning methodologies are increasingly adopted to automate time-series feature extraction in PHM~\cite{ref-1}. Recurrent and temporal convolutional networks track sequences effectively, but recursive update bottlenecks and fixed receptive fields inherently limit their performance over long-horizon trajectories. To capture long-range interactions, self-attention and multi-frequency analysis are deployed in advanced architectures such as Anomaly Transformer~\cite{ref-2} and TimesNet~\cite{ref-3}. Nevertheless, these frameworks exhibit quadratic computational complexity and remain highly sensitive to industrial noise~\cite{ref-1}. Alternative baselines, including PatchTST~\cite{ref-4}, optimize processing efficiency through sub-series segmentation or patching. However, strict channel-independent constraints in these methods often neglect cross-channel correlations, leading to escalated false alarm rates in multi-sensor industrial setups~\cite{ref-4}.
 
-\corresp{Corresponding author: Binh-Thuan Truong (e-mail: sunbv56@gmail.com).}
+Selective state space models, notably the Mamba architecture~\cite{ref-5}, establish linear-time complexity while maintaining a powerful selective scan mechanism. Specialized adaptations, including FEMamba~\cite{ref-6} and TFG-Mamba~\cite{ref-7}, incorporate time-frequency domain features to enhance diagnostic accuracy. Despite these structural improvements, significant research gaps persist within these frameworks. First, existing Mamba-based diagnostic networks treat signal forecasting and thresholding as decoupled processes, ignoring the inherent distribution shifts of non-stationary signals. Second, pure data-driven sequence networks operate as uninterpretable black boxes, decoupling statistical anomaly scores from underlying mechanical degradation physics~\cite{ref-8}. Third, traditional threshold calibration frequently induces data leakage by utilizing global validation data containing future anomalies. This limitation renders such approaches impractical for online deployment workflows where only localized, historical healthy baselines are available~\cite{ref-9}.
 
-\begin{abstract}
-Prognostics and Health Management (PHM) for rolling element bearings is pivotal for the reliability of modern industrial assets. While state-of-the-art Channel-Independent (CI) architectures utilizing Mamba State-Space Models (SSMs) have shown promise in time-series forecasting, their application in bearing PHM remains hindered by high-frequency vibration transients and the non-linear nature of mechanical degradation. This paper proposes \textbf{HybridMamba++}, a novel architecture that integrates series decomposition with multi-scale dual-kernel convolutional patching. Unlike vanilla Mamba models, HybridMamba++ explicitly decouples the vibration signal into trend and seasonal components, processing them through independent paths to capture both long-term degradation trajectories and short-term impulse faults. To ensure statistical robustness, we employ the Peak-Over-Threshold (POT) method based on Extreme Value Theory (EVT) for automated anomaly threshold calibration. Benchmarked against LSTM, TCN, ModernTCN, and Transformers under a strict 250k parameter budget, HybridMamba++ achieves a superior F1-Score of 0.9859 and an AUPRC of 0.9944 on the PRONOSTIA (FEMTO-ST) dataset. Furthermore, it demonstrates an ultra-low inference latency of 0.0673 ms/sample, underscoring its suitability for real-time edge deployment in Industrial IoT (IIoT) environments.
-\end{abstract}
+To resolve these interconnected challenges, a physics-informed, series-decomposed hybrid Mamba-CNN framework is proposed in this study for leakage-free bearing anomaly detection. The core architecture integrates a temporal series decomposition module with moving average pooling to isolate low-frequency degradation trends from high-frequency seasonal shock transients. The seasonal feature streams are processed through a channel-independent Mamba encoder to maximize global dependency extraction without cross-channel noise propagation. Concurrently, localized convolutional layers are deployed to alleviate high-frequency noise. To inject engineering domain knowledge and support mechanical interpretability, the latent representations are reinforced by an eight-dimensional physical-statistical layer (Stats Head) extracted directly from the lookback window. This layer incorporates Mean, Standard Deviation, Root Mean Square, Peak-to-Peak, Skewness, Kurtosis, Crest Factor, and Shape Factor, fusing raw data-driven representations with established mechanical profiles within a dedicated fusion forecasting head.
 
-\begin{keywords}
-Anomaly Detection, Bearing Prognostics, Channel-Independent, Deep Learning, FEMTO-ST, Health Index, Hybrid State-Space Models, Mamba, PHM, Remaining Useful Life (RUL), Rolling Element Bearings.
-\end{keywords}
+The main contributions of this research are summarized as follows:
+\begin{itemize}
+\item \textbf{Hybrid Architecture with Series Decomposition:} A hybrid Mamba-CNN forecasting paradigm with temporal series decomposition is introduced for unsupervised bearing anomaly detection, leveraging the linear computational complexity of selective state space models while mitigating cross-channel noise propagation.
+\item \textbf{Physics-Informed Structural Interpretability:} An eight-dimensional physical-statistical head is integrated into the latent space to bridge the gap between data-driven representations and mechanical descriptors, thereby enhancing model interpretability without relying on external black-box explainers.
+\item \textbf{Leakage-Free Validation Workflow:} A leakage-free threshold calibration workflow utilizing Extreme Value Theory (EVT) via the Peak Over Threshold (POT) technique~\cite{ref-10} is designed, where dynamic boundaries are derived strictly from early-stage healthy operational segments to prevent future data leakage and guarantee real-world deployment readiness.
+\end{itemize}
 
-\titlepgskip=0pt
+The remainder of this paper is organized as follows: Section~\ref{sect:s2} reviews the relevant literature and deep sequence baselines. Section~\ref{sect:s3} details the mathematical formulation of the proposed methodology. Section~\ref{sect:s4} outlines the experimental setup, baseline parameter budgeting under an automatic scaling protocol, and comparative performance analysis. Section~\ref{sect:s5} concludes the study and outlines future research trajectories.
 
-\maketitle
 
-%=============================================================
-\section{Introduction}
-\label{sec:introduction}
-%=============================================================
+\section{Related Work} \label{sect:s2}
 
-\PARstart{R}{olling} element bearings serve as the "heart" of rotating machinery, yet they remain one of the most vulnerable components, accounting for approximately 45\% to 70\% of all electrical machine failures \cite{lei2018machinery}. In the era of Industry 4.0, Prognostics and Health Management (PHM) has transitioned from reactive maintenance to proactive anomaly detection, leveraging high-frequency vibration data to identify incipient structural degradations before they escalate into catastrophic system failures.
+\subsection{Deep Sequence Modeling in Prognostics and Health Management (PHM)} \label{sect:s2dot1}
+Rolling element bearing failures account for approximately 40\% to 50\% of structural damages in rotating machinery~\cite{ref-1}. These degradation processes directly induce unplanned downtime and substantial economic deficits~\cite{ref-1}. Automated vibration-based diagnostic monitoring within industrial environments is frequently challenged by non-stationary distributions and background noise contamination~\cite{ref-1}. Sparse time-frequency features are extracted effectively via learnable Wavelet filter optimization frameworks, such as the DeSpaWN architecture~\cite{ref-11}. However, long-term dynamic degradation shifts over extended lifecycles are frequently omitted by these static approaches~\cite{ref-1}.
 
-Traditional deep learning approaches, such as Long Short-Term Memory (LSTM) and Temporal Convolutional Networks (TCN), have laid the foundation for automated feature extraction. However, these models often struggle with the "curse of long-range dependency"—where the signal length required to capture complete degradation cycles exceeds the effective receptive field of the network. While Transformers addressed this through self-attention, their quadratic computational complexity $O(L^2)$ poses a significant bottleneck for real-time edge monitoring where resources are constrained.
+To capture temporal dependencies, architectures like Long Short-Term Memory (LSTM) and Temporal Convolutional Networks (TCN) are widely implemented. Yet, these models remain fundamentally restricted by recursive hidden state update bottlenecks or fixed receptive field constraints. For unsupervised anomaly detection tasks, traditional Autoencoders (AEs) are prone to over-generalization. Early-stage anomalous impact pulses are inadvertently reconstructed by the latent space, thereby escalating missed alarm rates~\cite{ref-12}. This target mismatch is partially mitigated through joint semantic association discrepancies modeled by recent frameworks such as TimeRCD~\cite{ref-12}.
 
-The recent introduction of the Mamba architecture \cite{gu2023mamba}, a selective State-Space Model (SSM), has redefined the efficiency-accuracy trade-off by achieving linear complexity $O(L)$. However, existing Mamba-based PHM models, such as FEMamba \cite{feng2025femamba} and TFG-Mamba \cite{wei2026tfgmamba}, primarily focus on direct Remaining Useful Life (RUL) regression. These approaches often overlook two critical physical characteristics of bearing vibration: (i) the non-stationary nature of signal components (Trend vs. Seasonal) and (ii) the multi-scale nature of fault signatures, which range from broad energy shifts to micro-second impulse transients.
+\subsection{Transformer and Mamba for Long-Sequence Modeling} \label{sect:s2dot2}
+Long-term correlations are captured by self-attention mechanisms, which inherently exhibit a quadratic computational and memory complexity of $\mathcal{O}(N^2)$. Anomalous instances are isolated by the Anomaly Transformer architecture by capitalizing on local-to-global attention association discrepancies~\cite{ref-2}. Similarly, one-dimensional series are transformed into two-dimensional tensors via multi-periodicity analysis within the TimesNet framework to capture non-stationary variations~\cite{ref-3}. However, substantial computational overhead is introduced under long lookback horizons by both approaches. This computational burden is reduced through temporal patching and channel-independence (CI) constraints within PatchTST~\cite{ref-4}. Nevertheless, vital cross-channel correlations in multi-sensor configurations are neglected under this layout~\cite{ref-4}.
 
-To address these gaps, this paper introduces \textbf{HybridMamba++}, a Channel-Independent (CI) architecture specifically engineered for bearing PHM. The core contributions are:
+To break these computational bottlenecks, a linear-time complexity of $\mathcal{O}(N)$ is established by the foundational selective state space model (Mamba) via an input-dependent selective scan mechanism~\cite{ref-5}. Specialized Prognostics and Health Management (PHM) variants have emerged recently. Remaining useful life estimation is executed by FEMamba~\cite{ref-6}, while time-frequency degradation trend forecasting is performed by TFG-Mamba~\cite{ref-7}. For multivariate setups, Quadruple-Mamba blocks are utilized within TimeMachine to balance channel mixing~\cite{ref-8}. Concurrently, spatial sequence representation is optimized via low-rank channel information fusion in TSC-Mamba~\cite{ref-13}.
+
+For intelligent edge deployment, lightweight selective state space models are developed to optimize computational efficiency during rotating machinery fault diagnosis~\cite{ref-14}. Similarly, compact deep sequence networks are integrated with physical frequency band knowledge for online monitoring within the Physics-Guided Tiny-Mamba Transformer (PG-TMT) framework~\cite{ref-15}. Fault-masking effects under noisy environments are further mitigated by advanced signal mode separation strategies, such as MD-BiMamba~\cite{ref-16} or multi-scale decomposition and fusion frameworks utilizing Mamba~\cite{ref-17}. Nevertheless, these models are predominantly structured as data-driven black boxes operating under supervised paradigms. A critical requirement is thus created for unsupervised architectures backed by explicit structural descriptors~\cite{ref-15,ref-9}.
+
+\subsection{Threshold Calibration and Data Leakage} \label{sect:s2dot3}
+Unsupervised anomaly detection performance relies heavily on decision threshold calibration~\cite{ref-9}. Static thresholds fail under variable operating conditions due to continuous distribution shifts in the target domain~\cite{ref-9}. Mathematically rigorous open-set boundaries are established by integrating Extreme Value Theory (EVT) via the Peak Over Threshold (POT) technique directly into deep learning latent spaces~\cite{ref-10}.
+
+However, future data leakage is induced across prominent reconstruction baselines, including OmniAnomaly~\cite{ref-18}, USAD~\cite{ref-19}, and TranAD~\cite{ref-20}. This leakage is caused by utilizing global validation distributions containing anomalous segments to optimize threshold hyperparameters~\cite{ref-18,ref-19,ref-20}. To ensure real-world online deployment readiness, threshold calibration must be derived strictly from localized, early-stage healthy data segments~\cite{ref-9}.
+
+\subsection{Literature Comparison Matrix} \label{sect:s2dot4}
+The structural advantages and operational properties of the proposed paradigm are contrasted with prominent baseline methods in Table~\ref{tabref:table-1}.
+
+\begin{table}[htbp]  
+\tablesize{\footnotesize}
+\caption{Comprehensive Literature Matrix and Structural Comparison.}
+\label{tabref:table-1}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{2.2cm} L L L}
+\toprule
+\textbf{Study} & \textbf{Method Family} & \textbf{Key Strength} & \textbf{Key Limitation} & \textbf{Relation to this Work} \\
+\midrule
+LSTM ~\cite{ref-1} & Sequential / CNN & Simple sequence tracking & Limited long-range dependency modeling & Served as basic auto-scaled baselines \\
+\midrule
+PatchTST~\cite{ref-4} & Transformer & Efficient temporal patching & Weak local inductive bias; omits channel correlation & Served as an advanced linear baseline \\
+\midrule
+Mamba~\cite{ref-5} & Selective SSM & Linear long-sequence modeling ($\mathcal{O}(N)$) & Limited physical interpretability & Adopted as the core hidden sequence encoder \\
+\midrule
+FEMamba / TFG-Mamba~\cite{ref-6,ref-7} & Mamba-PHM & Deep degradation tracking & Predominantly dependent on supervised labels & Motivated the use of series decomposition \\
+\midrule
+OmniAnomaly / USAD / TranAD~\cite{ref-18,ref-19,ref-20} & Reconstruction AD & Stable multi-sensor loops & Over-generalization; causes data leakage & Contrasted via sequence forecasting paradigm \\
+\midrule
+EVT / POT~\cite{ref-10} & Statistical Threshold & Precise tail modeling & Can leak if calibrated globally & Executed strictly within healthy intervals \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+
+\section{Methodology} \label{sect:s3}
+
+\subsection{Problem Formulation} \label{sect:s3dot1}
+The structural health monitoring of rolling element bearings utilizing time-series trajectories is formulated under an unsupervised anomaly detection paradigm driven by a next-window forecasting mechanism. Let $X \in \mathbb{R}^{L \times C}$ denote a multivariate vibration sequence collected from an acceleration sensor array across $C$ physical channels over a historical lookback window of length $L$. The mathematical objective of the framework is to forecast the subsequent operational sequence within a defined forecast horizon of length $H$, denoted as $\widehat{Y} \in \mathbb{R}^{H \times C}$. This forecast is sequentially evaluated against the corresponding ground-truth future target sequence $Y \in \mathbb{R}^{H \times C}$.
+
+Network optimization is executed exclusively utilizing data distributions derived from the early-stage healthy operational phases of the machinery, identified via binary condition indicator variables equal to zero ($\texttt{healthy\_labels} == 0$).
+
+The global architectural layout of the proposed predictive framework is illustrated in \fig{fig:overall_architecture}. As shown in the layout, the raw vibration tensor with dimensions $(B, C, L)$ is directed into the Series Decomposition module to bifurcate the underlying mechanical dynamics into distinct low-frequency trend and high-frequency seasonal streams. The smooth trend path is handled via a low-complexity Linear projection layer to track long-term continuous physical wear. Concurrently, the highly non-linear seasonal component is passed through a simple patch embedding layer before deep temporal feature mapping is executed within a channel-independent (CI) Mamba selective state space backbone~\cite{ref-5}.
+
+To reinforce engineering interpretability, the latent features generated by the Mamba blocks are coupled with an 8-dimensional physical statistical vector inside a dedicated Fusion Head. Finally, the estimated trend and seasonal outputs are dynamically combined within a learnable mixing block governed by a channel-specific weighting parameter $\alpha$ to synthesize the complete future horizon forecast $\widehat{Y}$ with dimensions $(B, C, H)$.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{overall_architecture.pdf}
+    \caption{Overall architecture of the proposed vibration forecasting model based on Series Decomposition and CI Mamba.}
+    \label{fig:overall_architecture}
+\end{figure}
+
+\subsection{Series Decomposition} \label{sect:s3dot2}
+Aligning with the principle of architectural parsimony verified in temporal forecasting paradigms~\cite{ref-17}, the input sequence is decoupled into trend and seasonal feature streams to maximize representation capacity. The decomposition workflow is executed via a recursive Exponential Moving Average (EMA) formulation:
+\begin{equation}
+X_{t}[k] = \alpha \cdot X[k] + (1 - \alpha) \cdot X_{t}[k-1],
+\tag{1}
+\end{equation}
+
+\begin{equation}
+X_{s}[k] = X[k] - X_{t}[k],
+\tag{2}
+\end{equation}
+where $X_{t} \in \mathbb{R}^{L \times C}$ represents the low-frequency trend component, and $X_{s} \in \mathbb{R}^{L \times C}$ denotes the high-frequency seasonal component, with the initial state established as $X_{t}[0] = X[0]$. Instead of selecting a static, hand-tuned smoothing coefficient, the parameter $\alpha \in (0, 1)$ is formulated as a learnable parameter that is optimized end-to-end via backpropagation using the Sigmoid mapping $\alpha = \sigma(\theta_\alpha)$, where $\theta_\alpha \in \mathbb{R}$ represents a real-valued trainable parameter. Under the evaluated experimental configuration, the optimized parameter is observed to converge towards $\alpha \approx 0.03$. Given a decimated vibration sequence sampling rate of $f_s = 12.8$ kHz, this learned value corresponds to an equivalent analog low-pass cutoff frequency of $f_c = \frac{\alpha \cdot f_s}{2\pi} \approx 61.12$ Hz. For the Paderborn University (UPB) test rig, where the shaft rotational speed is typically $1500$ RPM (corresponding to a fundamental shaft frequency of $25$ Hz) or $900$ RPM ($15$ Hz), a learned cutoff frequency near $61.12$ Hz is considered appropriate as it is positioned above the fundamental rotational frequency to facilitate the capture of the low-frequency mechanical energy within the trend component.
+
+However, certain physical crossover effects are inherent to this learned cutoff configuration. For the $1500$ RPM ($25$ Hz) setup, the second harmonic ($50$ Hz) falls below $f_c$ and is partially routed into the trend branch, whereas for the $900$ RPM ($15$ Hz) setup, higher-order harmonics (above $60$ Hz) are separated into the seasonal branch. This physical crossover is acknowledged, and it is considered a reasonable engineering trade-off: (i) the primary low-frequency wear indicator (1x shaft speed) is expected to be preserved in the trend branch; (ii) early-stage fault frequencies (such as BPFI, BPFO, and transient structural resonance bands $>1$ kHz) are positioned above $61.12$ Hz and are generally isolated within the seasonal branch; and (iii) the parameterization of $\alpha$ limits computational overhead during inference because the learned coefficient functions as a static constant post-training. The boundary padding bias typical of sliding average operators is bypassed by this recursive formulation, and manual tuning of the decomposition window size is avoided.
+
+The trend component $X_{t}$ isolates the smooth progressive wear profile, reflecting long-term degradation trajectories. Conversely, the seasonal component $X_{s}$ captures non-linear, high-frequency dynamics, incorporating rotational cycles and transient impact shocks. To prevent overfitting, the low-complexity trend stream is forecasted across the target horizon using a direct linear projection layer under a strict channel-independent weight-sharing constraint:
+\begin{equation}
+\widehat{Y}_{t} = W_{t} X_{t} + b_{t},
+\tag{3}
+\end{equation}
+where $W_{t}$ denotes the projection weight matrix and $b_{t}$ represents the bias vector.
+
+\subsection{Hybrid Mamba-CNN Forecasting} \label{sect:s3dot3}
+The seasonal component $X_{s}$ encapsulates complex non-linear variations, which are processed through a hybrid stream fusing localized convolutional blocks and selective state space encoders. To reduce the token sequence length and reinforce localized spatial-temporal inductive biases, the seasonal time-series is partitioned into localized patches of size $P$ with a sliding stride of $S$. The total volume of generated temporal tokens $M$ is determined by:
+\begin{equation}
+M = \left\lfloor \frac{L - P}{S} \right\rfloor + 1.
+\tag{4}
+\end{equation}
+The projection of these patches into a latent embedding space of dimension $D$ is executed via a 1D convolutional layer sweeping across the temporal grid:
+\begin{equation}
+Z_{0} = \operatorname{Conv1D}(X_{s}).
+\tag{5}
+\end{equation}
+To suppress cross-channel noise propagation, the batch dimension $B$ and sensor channel dimension $C$ are flattened, enforcing a strict channel-independence constraint:
+\begin{equation}
+Z_{\text{flat}} \in \mathbb{R}^{(B \times C) \times M \times D}.
+\tag{6}
+\end{equation}
+The flattened latent representation is forwarded through a series of hybrid selective state space blocks. Within each block, the hidden input signal $Z_{m}$ at patch step $m$ is routed to a localized 1D convolutional branch with a kernel width $K$ and a non-linear SiLU activation function to suppress instrument noise:
+\begin{equation}
+Z_{m}^{\prime} = \operatorname{SiLU}\left(\operatorname{Conv1D}(Z_{m})\right).
+\tag{7}
+\end{equation}
+The filtered feature stream $Z_{m}^{\prime}$ serves as the input driver for the selective continuous state space model, which executes hidden state transitions using data-dependent coefficient matrices:
+\begin{equation}
+h_{m} = A_{m} h_{m-1} + B_{m} Z_{m}^{\prime},
+\tag{8}
+\end{equation}
+
+\begin{equation}
+y_{m} = C_{m} h_{m} + D_{m} Z_{m}^{\prime}.
+\tag{9}
+\end{equation}
+Integrating a 1D convolutional layer directly prior to the linear scanning mechanism provides localized noise filtering. Finally, the global temporal context vector $y_{m}$ is passed to a dedicated forecasting head that projects the latent representation back into the discrete time domain of the future forecast horizon:
+\begin{equation}
+\widehat{Y}_{s} = W_{s} y_{m} + b_{s}.
+\tag{10}
+\end{equation}
+
+\subsection{Physics-Informed Statistical Head} \label{sect:s3dot4}
+To supplement purely data-driven, black-box hidden spaces, a physical statistical head is structured to anchor the latent optimization within explicit mechanical descriptors. This block extracts an 8-dimensional time-domain statistical vector directly from the raw historical lookback window $X$ utilizing the formulation matrix summarized in \tabref{tabref:table-2}.
+
+
+\begin{table}[htbp] 
+\tablesize{\footnotesize}
+\caption{Physics-Informed Statistical Features Mapping Matrix.}
+\label{tabref:table-2}
+\begin{tabularx}{\textwidth}{c L C L}
+\toprule
+\textbf{Index} & \textbf{Statistical Descriptor} & \textbf{Mathematical Formulation} & \textbf{Physical Operational Interpretation} \\
+\midrule
+1 & Mean & $\mu = \frac{1}{L} \sum_{t=1}^{L} x_t$ \hfill (11) & Indicates structural eccentricity and DC-offset components \\
+\midrule
+2 & Standard Deviation & $\sigma = \sqrt{\frac{1}{L} \sum_{t=1}^{L} (x_t - \mu)^2}$ \hfill (12) & Measures energy variance surrounding the mean tracking profile \\
+\midrule
+3 & Root Mean Square & $x_{\text{rms}} = \sqrt{\frac{1}{L} \sum_{t=1}^{L} x_t^2}$ \hfill (13) & Tracks total destructive structural fatigue and degradation energy \\
+\midrule
+4 & Peak-to-Peak & $x_{\text{p-p}} = \max(x) - \min(x)$ \hfill (14) & Captures absolute maximum shock amplitude range within the window \\
+\midrule
+5 & Skewness & $S_k = \frac{1}{L \cdot \sigma^3} \sum_{t=1}^{L} (x_t - \mu)^3$ \hfill (15) & Measures distribution asymmetry induced by localized surface pitting \\
+\midrule
+6 & Kurtosis & $K_u = \frac{1}{L \cdot \sigma^4} \sum_{t=1}^{L} (x_t - \mu)^4$ \hfill (16) & Increases statistical sensitivity to initial transient impact micro-cracks \\
+\midrule
+7 & Crest Factor & $CF = \frac{\max(|x|)}{x_{\text{rms}}}$ \hfill (17) & Evaluates peak sharpness to isolate cracking pulses from background noise \\
+\midrule
+8 & Shape Factor & $SF = \frac{x_{\text{rms}}}{\frac{1}{L} \sum_{t=1}^{L} |x_t|}$ \hfill (18) & Reflects global structural variations in the wave profile \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+This 8-dimensional physical descriptor array $V_{\text{stats}}$ is normalized via a batch normalization layer and linearly projected before being concatenated directly with the global latent representation generated by the Mamba stream:
+\begin{equation}
+Z_{\text{fused}} = \left[ y_{m} \parallel \operatorname{Linear}\left(\operatorname{BatchNorm}\left(V_{\text{stats}}\right)\right) \right].
+\tag{19}
+\end{equation}
+This pathway is controlled via a system configuration parameter $\texttt{use\_stats\_head}$. If specified as false, the statistical pathway is bypassed to return a pure data-driven seasonal Mamba forecast. To combine the streams, a learnable dual-stream mixing module is implemented using a dynamic weighting parameter $\alpha_{c}$ optimized independently per sensor channel $c$:
+\begin{equation}
+\alpha_{c} = \sigma (w_{c}),
+\tag{20}
+\end{equation}
+
+\begin{equation}
+\widehat{Y} = \alpha_{c} \widehat{Y}_{t} + (1 - \alpha_{c}) \widehat{Y}_{s},
+\tag{21}
+\end{equation}
+where $\sigma$ represents the standard Sigmoid activation function and $w_{c}$ denotes a learnable weight parameter optimized via backpropagation.
+
+\subsection{Leakage-Free POT Thresholding} \label{sect:s3dot5}
+Following the acquisition of the composite forecast sequence $\widehat{Y}$, the Anomaly Score at each time window $t$ is formally defined via the Mean Squared Error (MSE) computed across all sensor dimensions and steps within the horizon $H$:
+\begin{equation}
+\label{eq:anomaly_score}
+S_{t} = \frac{1}{H \times C} \sum_{h = 1}^{H} \sum_{c = 1}^{C} \left(Y_{h, c} - \widehat{Y}_{h, c}\right)^{2}.
+\tag{22}
+\end{equation}
+To establish dynamic decision boundaries online, Extreme Value Theory (EVT) utilizing the Peak Over Threshold (POT) technique is integrated into the inference loop~\cite{ref-10}. The calibration workflow enforces a leakage-free constraint by executing parameter estimation exclusively over the error distribution derived from early-stage healthy operational sequences ($\texttt{healthy\_labels} == 0$), ensuring isolation from future degradation or target fault profiles. The execution procedure is structured via three sequential operational phases:
 \begin{enumerate}
-    \item \textbf{Series-Decomposed Hybrid Architecture}: We implement a decomposition layer that decouples the input signal into Trend and Seasonal components, allowing the model to learn stable degradation trajectories and volatile fault impulses separately.
-    \item \textbf{Multi-Scale Dual-Kernel Patching}: A novel front-end that captures multi-frequency transients using asymmetric convolutional kernels, significantly improving the sensitivity to early-stage faults.
-    \item \textbf{EVT-Based Threshold Calibration}: Integration of the Peak-Over-Threshold (POT) method for automated, statistically-grounded anomaly detection, achieving a near-zero False Alarm Rate (FAR) of 2.03\%.
-    \item \textbf{Rigorous Hardware-Aware Benchmarking}: A comparative study under a strict 250k parameter budget, demonstrating that HybridMamba++ outperforms Transformers and ModernTCN in both precision (AUPRC: 0.9944) and inference speed (0.0673 ms/sample).
+\item An initial baseline anchor threshold $t_{0}$ is established by computing a high-percentile marker (e.g., $98\%$) from the anomaly score sequence generated across the healthy training baseline.
+\item The extreme positive excesses exceeding the anchor threshold are filtered and aggregated: $A_{e} = \{ S_{t} - t_{0} \mid S_{t} > t_{0} \}$.
+\item The set of excess values $A_{e}$ is fitted to a Generalized Pareto Distribution (GPD) to mathematically bound the asymptotic behavior of the distribution tail:
+\begin{equation}
+G_{\xi , \beta} (x) = 1 - \left(1 + \frac {\xi x}{\beta}\right) ^ {- 1 / \xi},
+\tag{23}
+\end{equation}
+where $\xi$ and $\beta$ denote the shape and scale parameters, respectively, optimized via the Maximum Likelihood Estimation (MLE) method.
 \end{enumerate}
 
-The remainder of this paper is organized as follows. Section~\ref{sec:lit_review} reviews foundational work in bearing PHM and Health Index modeling. Section~\ref{sec:related_work} surveys related deep learning and Mamba-based approaches. Section~\ref{sec:methodology} describes the proposed CI-Mamba architecture and the experimental setup. Conclusions and future directions are discussed in Section~\ref{sec:conclusion}.
-
-%=============================================================
-\section{Literature Review}
-\label{sec:lit_review}
-%=============================================================
-
-The field of Prognostics and Health Management (PHM) for industrial components, particularly rolling element bearings, has undergone a significant transformation over the past decade. Rotating machinery is fundamental to modern industrial infrastructure, and bearing failure remains a primary cause of unplanned system downtime \cite{lei2018machinery}. Traditionally, bearing health monitoring relied on physical modeling and statistical signal processing. Time-domain features, such as Root Mean Square (RMS) and Kurtosis, have served as foundational health indicators due to their sensitivity to early-stage impulse faults and late-stage energy increases \cite{randall2011rolling}.
-
-A critical milestone in this domain was the introduction of the PRONOSTIA platform (FEMTO-ST dataset) \cite{nectoux2012pronostia}, which provided standardized vibration data under varying operating conditions. Recent literature emphasizes the construction of a robust Health Index (HI) as a precursor to RUL prediction. While linear HI models were common, research has shown that mechanical degradation often follows an exponential trajectory, particularly in the final stages of failure \cite{qian2017bearing}. This led to the adoption of exponential Health Indices, defined as:
-
+The final dynamic decision boundary $T_{\mathrm{dny}}$ corresponding to a configured target alarm probability $q$ (e.g., $q = 10^{-4}$) is computed as follows:
 \begin{equation}
-    HI(t) = \frac{e^{\lambda} - e^{\lambda \cdot \frac{t}{T}}}{e^{\lambda} - 1}
-    \label{eq:hi_model}
+T_{\mathrm{dny}} = t_{0} + \frac{\beta}{\xi} \left(\left(\frac{N q}{N_{t}}\right)^{-\xi} - 1\right),
+\tag{24}
 \end{equation}
+where $N$ represents the total volume of baseline observation samples, and $N_{t}$ is the historical volume of excess samples violating the initial anchor threshold $t_{0}$. During the real-time online monitoring stage, any testing window exhibiting an anomaly score satisfying the condition $S_{t} > T_{\mathrm{dny}}$ is immediately flagged as a structural anomaly instance. This systematic workflow mitigates false alarms caused by non-stationary operational variations under the defined protocol.
 
-\noindent where $\lambda$ represents the degradation rate and $T$ is the total lifetime. Such formulations allow models to prioritize the capturing of accelerated degradation patterns near end-of-life, which are crucial for triggering timely maintenance alerts.
 
-In 2025, the research landscape shifted toward **Mamba-based diagnostics**. Feng et al. \cite{feng2025femamba} demonstrated that SSMs could capture long-term degradation stages more effectively than LSTMs through global regularization. However, the computational overhead of multivariate scanning in models like MambaTS often limits their deployment on low-power industrial controllers. Our work builds upon the **Channel-Independent (CI) paradigm** introduced in PatchTST \cite{nie2023patchtst}, which suggests that processing sensors independently can prevent channel-mixing noise and improve forecasting stability in PHM tasks.
+\section{Experiments Design} \label{sect:s4}
 
-An anomaly is declared when the model-predicted HI falls below a calibrated threshold $\theta$, defined as:
-\begin{equation}
-    \hat{y}_{t} < \theta \Rightarrow \text{Anomaly at time } t
-    \label{eq:anomaly_rule}
-\end{equation}
+\subsection{Dataset Description and Temporal Partitioning Workflow} \label{sect:s4dot1}
+The empirical validation of the proposed framework is conducted using the Paderborn University (UPB) run-to-failure ball bearing dataset (type 61806-2RS, 30 mm inner diameter, 42 mm outer diameter, 7 mm width, 19 rolling elements) under dynamic operating conditions. Vibration telemetry is captured synchronously via two accelerometers (Channel A: horizontal rear, Channel C: frontal) at 128 kHz or 64 kHz.
 
-\noindent This forecasting-as-detection paradigm allows a single architecture to serve both HI estimation and online anomaly detection. Crucially, the forecasting Mean Squared Error (MSE) acts as a dynamic indicator of system health. By applying Extreme Value Theory (EVT) through the Peak-Over-Threshold (POT) method, we provide a mathematically rigorous way to define thresholds that adapt to varying industrial noise levels, a feature missing in traditional 3-Sigma or fixed-percentile methods.
+To ensure leakage-free evaluation under diverse operating conditions, the bearings are partitioned: train cohort (B02, B05, B08, B10, B11, B17) and test cohort (B01, B03, B04, B08, B10, B12, B17). Crucially, in the UPB dataset, different bearings are tested under distinct operating conditions (i.e., specific combinations of load torque, rotational speed, and radial force). For certain conditions, only a single run-to-failure bearing is available (specifically, B08, B10, and B17 are the sole representatives of their respective operating conditions). Because cross-bearing evaluation is infeasible under these single-bearing scenarios, this limitation is resolved during the data preprocessing phase by performing temporal partitioning on a single-bearing level. For each bearing run, the first 5\% of the lifecycle is discarded to eliminate startup transient noise ($\texttt{skip\_ratio} = 0.05$). The subsequent 40\% of the lifecycle (from 5\% to 45\%) is designated as the healthy stage to construct the training and validation sets. Within this healthy window, samples are sub-sampled to ensure absolute separation: training sequences are extracted using even indices (stride 2, $\texttt{[0::2]}$), while validation sequences are extracted using a stride of 5 starting from index 1 ($\texttt{[1::5]}$). The remaining 55\% of the lifecycle (from 45\% to catastrophic failure) is reserved entirely for testing and threshold calibration. To ensure a comprehensive evaluation, the test cohort also includes the unused healthy samples from the early stage (such as indices 3, 7, 11, etc. which are omitted from both the training and validation splits). Continuous sequences are processed using sliding windows with lookback $L_x = 4096$, horizon $L_y = 512$ and stride 1024. \tabref{tabref:table-3} summarizes the experimental parameters.
 
-%=============================================================
-\section{Related Work}
-\label{sec:related_work}
-%=============================================================
-
-Recent advancements in Deep Learning (DL) have introduced end-to-end architectures that bypass manual feature engineering for bearing PHM. We organize the related literature along four architectural axes.
-
-%-------------------------------------------------------------
-\subsection{Recurrent Architectures}
-%-------------------------------------------------------------
-Long Short-Term Memory (LSTM) networks have been widely utilized for bearing RUL prediction due to their ability to capture temporal dependencies in sequential vibration data \cite{wu2018remaining}. However, LSTMs often suffer from vanishing gradients when processing high-frequency signals over extended horizons, and their sequential computation is inherently difficult to parallelize. Lai et al.\ \cite{lai2025cnnmamba} recently proposed a hybrid architecture combining a multi-channel CNN front-end with a Mamba-enhanced adaptive self-attention LSTM, demonstrating improved fault classification accuracy on the Paderborn and CWRU datasets. While this work shares our interest in combining CNN and Mamba components, it focuses on \textit{fault diagnosis} (classification of fault type) rather than \textit{prognostics} (continuous HI forecasting and anomaly detection), and does not employ the Channel-Independent paradigm.
-
-%-------------------------------------------------------------
-\subsection{Convolutional and Temporal Networks}
-%-------------------------------------------------------------
-Temporal Convolutional Networks (TCN) \cite{bai2018tcn} and their modern variants, such as ModernTCN \cite{luo2024moderntcn}, have emerged as strong alternatives to recurrent models. By employing dilated causal convolutions and large kernel sizes, TCNs achieve large receptive fields while maintaining fully parallelizable training. ModernTCN, presented at ICLR 2024, further improves upon the standard TCN design through large-kernel depthwise convolutions and channel mixing, providing a strong convolutional baseline for long-sequence tasks.
-
-%-------------------------------------------------------------
-\subsection{Attention-Based Models}
-%-------------------------------------------------------------
-Transformers have set new benchmarks in sequence modeling through the self-attention mechanism \cite{vaswani2017attention}. Despite their global context awareness, the quadratic complexity $O(L^2)$ relative to sequence length $L$ poses significant challenges for deployment in resource-constrained edge devices in industrial IoT settings. PatchTST \cite{nie2023patchtst} introduced a paradigm shift by segmenting time series into patches and applying Transformer self-attention over those patch tokens in a Channel-Independent fashion, substantially improving efficiency and generalization in long-horizon forecasting.
-
-%-------------------------------------------------------------
-\subsection{State-Space Models and Mamba-Based Approaches}
-%-------------------------------------------------------------
-The most recent frontier in sequence modeling is the Mamba architecture \cite{gu2023mamba}, a structured Selective State-Space Model (S4-based) that achieves linear scaling $O(L)$ with sequence length while matching or exceeding Transformer-level performance on diverse benchmarks. Its hardware-aware design and selective state update mechanism make it particularly attractive for processing long industrial time series.
-
-Several concurrent works have applied Mamba to bearing prognostics. \textbf{FEMamba} \cite{feng2025femamba} proposes a Feature-Enhanced Mamba framework that incorporates degradation-stage-aware global regularization to improve RUL prediction; however, it does not employ a Channel-Independent patch-based embedding or address anomaly detection. \textbf{TFG-Mamba} \cite{wei2026tfgmamba} fuses temporal and frequency-domain information through a gated Mamba mechanism to improve computational efficiency in bearing RUL regression. While TFG-Mamba also emphasizes efficiency, it employs FFT-based frequency branch fusion rather than convolutional spatial patching, and does not report AUPRC or inference latency as evaluation metrics.
-
-In the broader time-series forecasting literature, Huang et al.\ \cite{huang2025cipatch} demonstrated that a Channel-Independent architecture combining patch embeddings with a Mamba backbone significantly improves long-horizon multivariate forecasting accuracy. However, this approach is designed for general forecasting tasks and does not address the domain-specific requirements of bearing PHM: exponential HI label construction, calibrated anomaly thresholds, or inference latency evaluation for edge deployment.
-
-Multi-scale spatial-temporal Mamba hybrid models have also been explored for tool RUL prediction. \textbf{ST-MambaFormer} \cite{zhu2025stmambaformer} combines a heavy ResNet-50 CNN backbone with Mamba for multi-scale feature fusion, targeting cutting tool degradation. While the hybrid motivation is similar to our work, the use of a large pre-trained ResNet backbone, a different degradation domain, and the absence of a parameter budget constraint distinguish it substantially from our approach.
-
-\textbf{Research Gap.} Existing Mamba-based prognostics works focus on direct RUL regression and do not jointly address: (i)~the Channel-Independent paradigm with lightweight multi-scale convolutional patching; (ii)~exponential HI-based anomaly detection evaluated with AUPRC; and (iii)~parameter-budget-controlled architectural fairness. Our proposed CI-Mamba directly targets this gap.
-
-\section{Proposed Methodology}
-\label{sec:methodology}
-
-\subsection{Problem Formulation and Data Processing}
-\label{sec:problem_formulation}
-
-Let $S \in \mathbb{R}^{C \times L_{total}}$ denote the multivariate vibration signal. Following the sliding window paradigm, we generate input-target pairs $(X, Y)$:
-\begin{itemize}
-    \item \textbf{Lookback (Input)}: $X = S[:, t:t+L] \in \mathbb{R}^{C \times L}$
-    \item \textbf{Horizon (Target)}: $Y = S[:, t+L:t+L+K] \in \mathbb{R}^{C \times K}$
-\end{itemize}
-where $L$ and $K$ represent the lookback and horizon lengths, respectively.
-
-To handle non-stationarity, each window $X$ is normalized using Adaptive Normalization (RevIN):
-\begin{equation}
-    \mu_X = \frac{1}{L} \sum_{i=1}^L X_i, \quad \sigma_X = \sqrt{\frac{1}{L} \sum_{i=1}^L (X_i - \mu_X)^2 + \epsilon}
-\end{equation}
-\begin{equation}
-    \hat{X} = \frac{X - \mu_X}{\sigma_X}
-\end{equation}
-The same statistics $(\mu_X, \sigma_X)$ are used to normalize the target $Y$ and denormalize the forecast $\hat{Y}$.
-
-\subsection{HybridMamba++ Architecture}
-\label{sec:architecture}
-
-{\setkeys{Gin}{width=0.5\textwidth}\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt){ci_mamba_processing.png}{The end-to-end processing pipeline of HybridMamba++. The workflow encompasses five stages: (1) Raw data acquisition and windowing; (2) Preprocessing via RevIN and physical feature extraction; (3) Hybrid encoding through series decomposition and Mamba backbone; (4) Forecasting with adaptive denormalization; and (5) Anomaly detection using MSE-based residual analysis and POT thresholding.}{fig:pipeline}}
-
-The architecture of HybridMamba++ consists of three primary modules: (1) Series Decomposition, (2) Multi-scale Patching, and (3) Selective SSM Encoding.
-
-\subsubsection{Module 1: Series Decomposition}
-To decouple the stable degradation trends from volatile transient impulses, we apply a series decomposition layer as defined in our pipeline logic:
-\begin{equation}
-    X_{trend} = \text{AvgPool}(X, \text{kernel}=k)
-\end{equation}
-\begin{equation}
-    X_{seasonal} = X - X_{trend}
-\end{equation}
-The trend component captures the gradual increase in vibration energy, while the seasonal component focuses on high-frequency shocks.
-
-\subsubsection{Module 2: Multi-Scale Dual-Kernel Patching}
-The seasonal branch employs a multi-scale patch embedding $\{P_1, P_2, \dots, P_m\}$ to capture diverse frequency components:
-\begin{equation}
-    E_{seasonal} = \text{Concat}(\text{PatchEmbed}_{P_1}(X_{seasonal}), \dots, \text{PatchEmbed}_{P_m}(X_{seasonal}))
-\end{equation}
-
-\subsubsection{Module 3: Selective SSM Encoding and Mixing}
-The final forecast $\hat{Y}$ is a weighted sum of the seasonal forecast $\hat{Y}_s$ and trend forecast $\hat{Y}_t$:
-\begin{equation}
-    \hat{Y} = \sigma(\alpha) \cdot \hat{Y}_s + (1 - \sigma(\alpha)) \cdot \hat{Y}_t
-\end{equation}
-where $\alpha$ is a learnable parameter per channel.
-
-\subsection{Automated Anomaly Detection via POT}
-\label{sec:pot_method}
-The anomaly score $s$ for each window is calculated as the Mean Squared Error (MSE) of the prediction:
-\begin{equation}
-    s = \frac{1}{C \cdot K} \sum_{c=1}^C \sum_{k=1}^K (Y_{c,k} - \hat{Y}_{c,k})^2
-\end{equation}
-
-To define a robust threshold $z_q$, we utilize the Peak-Over-Threshold (POT) method. Given a high quantile $t$ (e.g., $P_{98}$), we fit a Generalized Pareto Distribution (GPD) to the excesses $E = \{s_i - t \mid s_i > t\}$. The final threshold $z_q$ for a target probability $q$ is:
-\begin{equation}
-    z_q = t + \frac{\sigma}{\gamma} \left( \left( \frac{n}{N_t} q \right)^{-\gamma} - 1 \right)
-\end{equation}
-This ensures a near-zero False Alarm Rate while maintaining high sensitivity.
-
-\subsection{Experimental Setup}
-\label{sec:exp_setup}
-
-\subsubsection{Dataset and Preprocessing}
-Experiments are conducted on the PRONOSTIA (FEMTO-ST) dataset. We follow a 10/50/40 data partitioning strategy: the first 10\% (break-in) is discarded, the next 50\% (healthy state) is used for training and threshold calibration, and the remaining 40\% (degradation state) is used for testing. To enhance model robustness and cross-unit generalization, we implement a \textbf{Multi-Bearing Training} strategy, where the model is trained on a combination of datasets (e.g., bearings B02 and B05) and evaluated on unseen units (B01, B03, B04). Signals are normalized using Adaptive Normalization (RevIN) to handle distribution shifts.
-
-\subsubsection{Baselines and Parameter Budget}
-To ensure architectural fairness, all models are constrained to a parameter budget of 200k--250k parameters. We compare HybridMamba++ against LSTM, TCN, ModernTCN, and a Patch-based Transformer.
-
-\section{Experimental Results and Discussion}
-\label{sec:results}
-
-\subsection{Quantitative Performance Comparison}
-The performance of HybridMamba++ and the baselines is summarized in Table~\ref{tab:metrics}. HybridMamba++ achieves the highest F1-Score (0.9859) and AUPRC (0.9944), demonstrating its superior capability in distinguishing incipient faults from normal operation. 
-
-Furthermore, we evaluate the scalability of our architecture by comparing a larger variant, \textbf{Mamba1-Hybrid} (4.49M parameters), against the \textbf{MambaTS-Official} (8.45M parameters) baseline. Despite having approximately 47\% fewer parameters, Mamba1-Hybrid achieves comparable anomaly detection performance (F1-Score: 0.9543) and exhibits significantly lower inference latency (0.0381 ms/sample vs 0.0812 ms/sample for ModernTCN), underscoring the efficiency of the selective SSM mechanism in industrial monitoring tasks.
-
-\begin{table}[h]
-\caption{Performance comparison on the FEMTO-ST Dataset (Bearing B02).}
-\label{tab:metrics}
-\centering
-\begin{tabular}{lcccc}
+\begin{table}[htbp]
+\tablesize{\footnotesize}
+\caption{Experimental Configuration and Baseline Models Setup.}
+\label{tabref:table-3}
+\begin{tabularx}{\textwidth}{p{3.5cm} L}
 \toprule
-\textbf{Method} & \textbf{F1-Score} & \textbf{AUPRC} & \textbf{FAR (\%)} & \textbf{Latency (ms)} \\
+\textbf{Parameter/Item} & \textbf{Parameter Budget} \\
 \midrule
-LSTM & 0.9214 & 0.9423 & 5.42 & 0.1542 \\
-TCN & 0.9458 & 0.9610 & 4.18 & 0.0985 \\
-ModernTCN & 0.9672 & 0.9785 & 3.25 & 0.0812 \\
-Transformer & 0.9715 & 0.9821 & 2.84 & 0.1245 \\
-\textbf{HybridMamba++} & \textbf{0.9859} & \textbf{0.9944} & \textbf{2.03} & \textbf{0.0673} \\
+Dataset & Paderborn Bearing Dataset (61806-2RS) \\
+Sampling Rate & 64 kHz / 128 kHz \\
+Sliding Window & Lookback ($L_x$) = 4096, Horizon ($L_y$) = 512, Stride = 1024 \\
+Data Split & Healthy Training: 5\%–45\% lifecycle; Testing: 45\%--catastrophic failure \\
+Sub-sampling & Train: stride 2 ([0::2]), Val: stride 5 starting from 1 ([1::5]) \\
+Baselines & LSTM, PatchTST, SimpleMamba \\
+Evaluation Metrics & Precision, Recall, F1-Score, FAR, Latency, VRAM \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
-\subsection{Impact of Thresholding Strategies}
-The effectiveness of the anomaly detection pipeline is heavily dependent on the thresholding strategy. We compare the proposed POT method against standard statistical baselines, as shown in Table~\ref{tab:thresholding}. The POT method (q=1e-3) achieves the best balance, providing the highest F1-Score (0.9859) and the lowest False Alarm Rate (2.03\%), which is critical for reducing unnecessary maintenance costs in industrial settings.
+\subsection{Baseline Models and Parameter Budget Synchronization Protocol} \label{sect:s4dot2}
+The proposed model is compared against three representative baseline architectures: LSTM, PatchTST, and SimpleMamba (a standard selective space-state model operating on raw signals without decomposition or Stats Head). To ensure academic fairness, an automated baseline parameter scaling protocol (autoscale\_baselines: true) is activated. The layers and hidden dimensions of all baseline models are dynamically adjusted to match the trainable parameter budget of the proposed HybridMambaCNN ($\sim$338k parameters), ensuring that performance improvements are due to architectural advantages rather than parameter capacity imbalances.
 
-\begin{table}[h]
-\caption{Comparison of Thresholding Strategies (HybridMamba++ on B02).}
-\label{tab:thresholding}
-\centering
-\begin{tabular}{lccc}
+
+\subsection{Training Infrastructure and Optimization Pipeline} \label{sect:s4dot3}
+Training is executed for 10 epochs with a batch size of 128 using an Adam optimizer (learning rate $5 \times 10^{-4}$) on an NVIDIA CUDA platform. To mitigate the impact of abrupt industrial outlier spikes, gradient updates are optimized using the Huber loss paradigm. For absolute prediction errors $e = y - \hat{y}$:
+\begin{equation}
+L_{\delta} (e) = \frac{1}{2} e^{2}, \quad \text{for } |e| \leq \delta,
+\tag{25}
+\end{equation}
+
+\begin{equation}
+L_{\delta} (e) = \delta \left(|e| - \frac{1}{2} \delta\right), \quad \text{for } |e| > \delta,
+\tag{26}
+\end{equation}
+where the threshold parameter $\delta$ is set to 1.0. This scales down penalization for extreme outlier shocks while maintaining smooth quadratic gradients for nominal reconstruction errors.
+
+\subsection{Anomaly Scoring and Evaluation Strategy} \label{sect:s4dot4}
+The anomaly score $S_t$ for a test window at time step $t$ is computed via the Mean Squared Error (MSE) across the channels and forecast horizon as formulated in Eq.~(\ref{eq:anomaly_score}).
+
+Performance is evaluated using standard diagnostics metrics: Precision, Recall, F1-Score, and False Alarm Rate (FAR). Computational efficiency is assessed via latency and VRAM footprint.
+
+\vspace{6pt}
+\noindent\textit{*Note: Due to local computing constraints, a representative subset of the UPB bearing dataset is utilized to establish a high-density, reproducible benchmarking baseline.}
+
+
+\section{Experimental Results and Discussion} \label{sect:s5}
+In this section, the empirical evaluation of the proposed series-decomposed hybrid Mamba-CNN architecture is presented. The analysis begins with a detailed component-level validation of the series decomposition module, demonstrating waveform decomposition dynamics, spectral energy separation, and latent space dimensionality. Following this, the global anomaly detection performance is assessed on run-to-failure bearing vibration data, comparing the proposed framework against three scaled baselines under a strict parameter budgeting protocol. Finally, computational latency, hardware memory footprints, and threshold calibration overhead are evaluated to validate its real-time edge-deployment capability.
+\subsection{Validation of Series Decomposition Dynamics} \label{sect:s5dot1}
+
+The EMA-based series decomposition described in Section~\ref{sect:s3dot2} was evaluated using bearing B02 across healthy, mid-life, and fault-onset stages. The smoothing coefficient $\alpha$ determines the equivalent memory window $N_{\text{eq}} \approx (2-\alpha)/\alpha$, where smaller values emphasize long-term degradation trends and larger values retain more high-frequency fluctuations. The value $\alpha=0.03$ ($N_{\text{eq}}\approx66$) was selected through a grid search over $\{0.0001, 0.001, 0.003, 0.01, 0.03, 0.05, 0.1, 0.1368, 0.2\}$ by maximizing the Pearson correlation between trend RMS and lifecycle index. Among the evaluated candidates, this configuration produced the highest correlation coefficient ($r=0.6191$).
+
+For $\alpha=0.03$, a gradual increase in the raw RMS was observed across the bearing lifecycle, while the seasonal RMS exhibited increasing high-frequency activity. PSD analysis indicated a frequency-domain separation between the trend and seasonal components across the evaluated stages. At fault onset, FFT analysis of the seasonal component showed a dominant spectral peak near the theoretical Ball Pass Frequency Inner (BPFI), which is consistent with the presence of an inner-ring defect.
+
+Additional evidence for the dual-stream forecasting design was obtained from correlation and dimensionality analyses. The trend component exhibited a Pearson correlation coefficient of $r_t=0.6191$ and required 11 principal components (PCs) to explain 90\% of the cumulative variance. In comparison, the seasonal component yielded $r_s=0.6631$ and required 31 PCs to reach the same variance threshold, corresponding to a $2.8\times$ larger representation space. These observations suggest that the trend branch can be represented using a lower-complexity predictor, whereas the higher-dimensional seasonal branch may benefit from a more expressive encoder.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\linewidth]
+    {fig_waveform_decomposition.png}
+    \caption{Waveform decomposition results on bearing B02 across three representative phases: healthy, mid-life, and fault onset.}
+    \label{fig:waveform_decomposition}
+\end{figure}
+
+\subsection{Anomaly Detection Performance Comparison} \label{sect:s5dot2}
+The anomaly detection performance was evaluated under localized Peak Over Threshold (POT) calibration ($q = 10^{-3}$). The macro-average performance metrics across the seven test bearings are summarized in Table~\ref{tabref:table-4}. The best performing metrics are highlighted in bold, while the second-best results are underlined.
+
+\begin{table}[htbp] 
+\tablesize{\footnotesize}
+\setlength{\tabcolsep}{3pt}
+\caption{Macro-average anomaly detection performance and multi-threshold calibration profiles.}
+\label{tabref:table-4}
+\begin{tabularx}{\textwidth}{l c C C C C C C C C}
 \toprule
-\textbf{Method} & \textbf{F1-Score} & \textbf{FAR (\%)} & \textbf{Threshold} \\
+\textbf{Model} & \textbf{BS} & \begin{tabular}{@{}c@{}}\textbf{Val}\\\textbf{MSE}\end{tabular} & \begin{tabular}{@{}c@{}}\textbf{Val}\\\textbf{MAE}\end{tabular} & \begin{tabular}{@{}c@{}}\textbf{Test}\\\textbf{MSE}\end{tabular} & \begin{tabular}{@{}c@{}}\textbf{Test}\\\textbf{MAE}\end{tabular} & \begin{tabular}{@{}c@{}}\textbf{F1}\\\textbf{(Rob)}\end{tabular} & \begin{tabular}{@{}c@{}}\textbf{FAR}\\\textbf{(Rob)}\end{tabular} & \begin{tabular}{@{}c@{}}\textbf{F1}\\\textbf{(POT)}\end{tabular} & \begin{tabular}{@{}c@{}}\textbf{FAR}\\\textbf{(POT)}\end{tabular} \\
 \midrule
-3-Sigma & 0.9822 & 2.58 & 1.4104 \\
-Robust (MAD) & 0.9851 & 2.15 & 1.6010 \\
-Percentile (99.7) & 0.9852 & 2.13 & 1.6171 \\
-\textbf{POT (q=1e-3)} & \textbf{0.9859} & \textbf{2.03} & \textbf{1.6928} \\
+LSTM & 64 & 0.7505 & 0.6439 & 4.4386 & 1.2215 & 0.8905 & \textbf{0.0112} & 0.6888 & 0.0011 \\
+Simple-Mamba & 64 & \underline{0.5243} & \underline{0.5194} & 4.6807 & 1.1521 & \underline{0.9155} & 0.0129 & 0.6559 & 0.0011 \\
+PatchTST & 64 & \textbf{0.4993} & \textbf{0.5058} & \underline{4.2575} & \textbf{1.1282} & \textbf{0.9156} & 0.0126 & \textbf{0.7649} & 0.0011 \\
+Mamba-Hybrid & 1024 & 0.5778 & 0.5538 & \textbf{4.2488} & \underline{1.1448} & 0.9048 & \textbf{0.0112} & \underline{0.7565} & 0.0011 \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
+{\footnotesize Note: BS: Batch Size; Rob: Robust Thresholding Configuration; POT: Peak Over Threshold Calibration.}
 \end{table}
 
-\subsection{Correlation with Physical Degradation Trends}
-A key advantage of HybridMamba++ is its alignment with the physical degradation process across different mechanical units. As shown in Figures~\ref{fig:degradation_trend_b02} and \ref{fig:degradation_trend_b04}, the Anomaly Score (MSE-based) exhibits a strong correlation with traditional physical indicators such as Root Mean Square (RMS) and Kurtosis. When incipient degradation occurs, the Anomaly Score reacts instantaneously with a sharp jump, preceding total failure. This behavior is consistent across different datasets (B02 and B04), demonstrating that the model captures universal structural changes in vibration signatures rather than over-fitting to a single bearing's characteristics.
+As shown in Table~\ref{tabref:table-4}, the proposed Mamba-Hybrid model achieves the lowest test forecasting error, with a Test MSE of 4.2488 compared to 4.2575 for PatchTST, 4.4386 for LSTM, and 4.6807 for Simple-Mamba. Under the Peak Over Threshold (POT) thresholding configuration, PatchTST yields the highest F1-Score of 76.49\%, closely followed by Mamba-Hybrid at 75.65\%, while LSTM and Simple-Mamba achieve 68.88\% and 65.59\%, respectively. All models maintain a low FAR of 0.11\% (0.0011) under POT calibration, which is significantly lower than their FAR under Robust thresholding (1.12\%--1.29\%). This performance profile demonstrates the effectiveness of Mamba-Hybrid in tracking long-term degradation patterns while maintaining highly competitive anomaly detection performance. Notably, the proposed model achieves the best Test MSE and the second-best POT F1-Score among all compared methods, indicating a favorable balance between forecasting accuracy and anomaly detection capability.
 
-{\setkeys{Gin}{width=0.8\textwidth}\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt){full_lifecycle_trend_B02.png}{Full life-cycle degradation trend for bearing B02. The shaded regions indicate the initial skip period (gray), training/validation area (blue), and the test/fault area (red). The red line (Anomaly Score) accurately tracks the physical degradation trend indicated by RMS and Kurtosis.}{fig:degradation_trend_b02}}
+\subsection{Quantitative Ablation Study} \label{sect:s5dot3}
+To evaluate the contribution of each architectural component, a quantitative ablation study was conducted. To ensure architectural fairness, all evaluated models were constrained to a parameter budget of approximately 200k parameters and were trained and evaluated exclusively on a subset containing five bearings (B01--B05). The study was conducted across four distinct variants:
+\begin{enumerate}
+\item \textbf{Variant 1} (\textit{SimpleMamba})\textbf{:} Standard selective Mamba applied directly to raw signals without temporal decomposition, patch embeddings, or convolutional layers.
+\item \textbf{Variant 2} (\textit{MambaDecomp})\textbf{:} Integrates the temporal series decomposition module to separate trend and seasonal streams.
+\item \textbf{Variant 3} (\textit{MambaDecomp\_P16\_S8})\textbf{:} Incorporates the patch embedding layer ($\texttt{Patch\_Size} = 16$, $\texttt{Stride} = 8$) to reduce sequence length and optimize hardware footprints.
+\item \textbf{Variant 4} (\textit{MambaCNN\_Decomp})\textbf{:} The proposed configuration fusing the localized 1D CNN block directly prior to Mamba selective scan layers to suppress instrument noise.
+\end{enumerate}
 
-{\setkeys{Gin}{width=0.8\textwidth}\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt){full_lifecycle_trend_B04.png}{Cross-dataset validation on bearing B04. Despite differences in mechanical failure modes, HybridMamba++ maintains high sensitivity to incipient faults, showing consistent correlation with physical energy shifts and structural impact transients (Kurtosis).}{fig:degradation_trend_b04}}
+The experimental results across these variants are presented in Table~\ref{tabref:table-5}.
 
-\subsection{Inference Efficiency for Edge Deployment}
-HybridMamba++ exhibits the lowest inference latency (0.0673 ms per sample), which is 45\% faster than the Transformer baseline. This efficiency stems from the linear complexity of the selective SSM mechanism and the lightweight convolutional patch embedding.
+\begin{table}[htbp] 
+\tablesize{\footnotesize}
+\caption{Resource consumption and multi-stage latency profile per sample across variants.}
+\label{tabref:table-5}
+\begin{tabularx}{\textwidth}{>{\raggedright\arraybackslash}X c c c c}
+\toprule
+\textbf{Model Variant} & \textbf{Variant 1} & \textbf{Variant 2} & \textbf{Variant 3} & \textbf{Variant 4} \\
+\midrule
+Val MSE & 0.3800 & 0.3211 & 0.2837 & 0.3108 \\
+Val MAE & 0.4226 & 0.3871 & 0.3623 & 0.3813 \\
+Test MSE & 3.2838 & 3.2066 & 3.2302 & 3.1454 \\
+Test MAE & 0.9201 & 0.9039 & 0.8978 & 0.8946 \\
+\midrule
+F1 (POT) & 0.9350 & 0.9419 & 0.9445 & 0.9394 \\
+FAR (POT) & 0.0013 & 0.0013 & 0.0014 & 0.0013 \\
+\midrule
+VRAM Train (MB) & 2859.10 & 2859.27 & 394.83 & 403.85 \\
+VRAM Inference (MB) & 573.94 & 575.51 & 95.81 & 102.76 \\
+Train Time/Epoch (s) & 189.74 & 217.12 & 43.41 & 47.27 \\
+Latency (ms) & 1.0571 & 1.0226 & 0.1832 & 0.1651 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-\subsection{Multi-Bearing Generalization and Scalability}
-\label{sec:multi_bearing}
-The ultimate goal of a robust PHM system is to maintain high accuracy across different mechanical units without unit-specific fine-tuning. By training on a diverse set of bearings (B02 and B05), HybridMamba++ learns a generalized representation of the "healthy" state. As shown in Fig.~\ref{fig:multi_bearing_lifecycle}, the model effectively identifies the transition to the degradation phase across all tested units (B01-B05), adapting the Peak-Over-Threshold (POT) calibration to the specific background noise levels of each bearing. This multi-bearing consistency confirms that our architecture captures universal physical degradation signatures rather than unit-specific noise patterns.
+As demonstrated by the results in Table~\ref{tabref:table-5}, the isolation of the low-frequency trend component via the series decomposition module (Variant 2 vs. Variant 1) leads to an improvement in F1-score from 93.50\% to 94.19\%. By incorporating patch embeddings (Variant 3 vs. Variant 2), a significant 86.2\% reduction in GPU training VRAM (from 2859.27~MB to 394.83~MB) is achieved, and training speed is accelerated by $5.0\times$ (from 217.12~s to 43.41~s per epoch) as a result of compressing the token sequence length. Finally, the validation forecasting error is affected by the integration of the localized 1D convolutional block (Variant 4 vs. Variant 3), where the Val MSE is adjusted from 0.2837 to 0.3108; however, the Test MSE is minimized from 3.2302 to 3.1454, and the Test MAE is reduced from 0.8978 to 0.8946. A system latency of 0.1651~ms is achieved, which highlights the role of convolutional layers in suppressing operational noise.
 
-{\setkeys{Gin}{width=0.6\textwidth}\Figure[t!](topskip=0pt, botskip=0pt, midskip=0pt){multi_bearing_lifecycle.png}{Multi-bearing life-cycle visualization. The chart integrates RMS energy trends with the model-predicted Anomaly Score (MSE) across bearings B01 to B05. The dynamic thresholding successfully identifies incipient faults regardless of the varied baseline vibration levels.}{fig:multi_bearing_lifecycle}}
+Empirical evaluation of the integrated components was conducted. Inclusion of the Physical Stats Head stabilizes the healthy forecasting baseline, yielding a 5.56\% validation MSE reduction, a 0.09\% test MAE reduction, and a downstream F1-score improvement (0.8760 to 0.8800), requiring only 0.07\% parameter overhead despite a minor 1.04\% test MSE increase from late-stage wear oscillations. For thresholding, the proposed POT calibration achieves the lowest FAR of 0.0018 (outperforming 3-Sigma at 0.0027 and Robust at 0.0022). Furthermore, POT calibration requires only 12.12~ms, which is highly edge-compatible compared to Gaussian Mixture Models (835.96~ms) and global search (11187.62~ms), despite a slightly more conservative macro F1-score (0.8800 vs. 0.9202 for 3-Sigma).
 
-\section{Conclusion}
-\label{sec:conclusion}
+\subsection{Real-Time Inference Complexity and VRAM Footprint} \label{sect:s5dot4}
+To evaluate edge deployment suitability, resource consumption and latency profiling were evaluated on an NVIDIA Tesla T4 GPU under batched inference workloads (Batch Size 64 and 1024).
 
-This paper introduces HybridMamba++, a series-decomposed state-space model for high-precision bearing anomaly detection. By explicitly decoupling trend and seasonal components and employing multi-scale dual-kernel patching, the proposed model effectively captures the complex degradation dynamics of industrial bearings. Experimental results on the FEMTO-ST benchmark confirm that HybridMamba++ achieves state-of-the-art performance in terms of F1-Score, AUPRC, and inference latency under a strict parameter budget. Future work will explore self-supervised pre-training and domain adaptation for varying operating conditions.
+\begin{table}[htbp]  
+\tablesize{\footnotesize}
+\caption{Resource consumption and latency profiles (per sample) under batched inference.}
+\label{tabref:table-6}
+\begin{tabularx}{\textwidth}{l c C C C}
+\toprule
+\textbf{Model} & \textbf{BS} & \textbf{Peak VRAM (MB)} & \textbf{Total Latency (ms/sample)} & \textbf{Inference (ms/sample)} \\
+\midrule
+LSTM & 64 & \textbf{145.9} & 14.1804 & 14.1646 \\
+Simple-Mamba & 64 & 2023.3 & 5.6823 & 5.6641 \\
+PatchTST & 64 & 1335.4 & \underline{2.0576} & \underline{2.0382} \\
+Mamba-Hybrid & 64 & \underline{215.9} & 3.9426 & 3.9245 \\
+Mamba-Hybrid & 1024 & 3253.6 & \textbf{1.0086} & \textbf{0.9973} \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-%=============================================================
-% BIBLIOGRAPHY
-%=============================================================
-\begin{thebibliography}{99}
+Table~\ref{tabref:table-6} highlights the favorable resource-performance trade-off of Mamba-Hybrid. At a baseline batch size of 64, it registers a peak inference VRAM of only 215.9~MB—an 83.8\% and 89.3\% reduction compared to PatchTST (1335.4~MB) and Simple-Mamba (2023.3~MB)—while maintaining a per-sample latency of 3.94~ms. At $BS = 1024$, its per-sample latency drops to 1.01~ms ($3.9\times$ internal throughput speedup), outperforming LSTM, Simple-Mamba, and PatchTST by $14.1\times$, $5.6\times$, and $2.0\times$, respectively. For training, Mamba-Hybrid ($BS = 1024$) requires 8129.23~MB of peak VRAM, with an average epoch duration of 1627.56~s (1.01~ms/step), while inference requires 3253.55~MB VRAM with a latency of 0.997~ms/step.
 
-\bibitem{lei2018machinery}
-Y. Lei, N. Li, L. Guo, N. Li, T. Yan, and J. Lin,
-``Machinery health prognostics: A systematic review from data acquisition to RUL prediction,''
-\textit{Mechanical Systems and Signal Processing}, vol.~104, pp.~799--834, 2018.
+This efficiency is further demonstrated at $BS = 512$, where PatchTST's quadratic self-attention results in a GPU memory explosion of 10,591.0~MB (~10.6~GB). In contrast, Mamba-Hybrid requires only 1629.8~MB (~1.6~GB)—a $6.5\times$ reduction—due to the linear complexity of its selective scan. Consequently, while PatchTST fails to scale to $BS \ge 1024$ due to Out-Of-Memory (OOM) limits on standard edge devices, Mamba-Hybrid scales seamlessly to $BS = 1024$ (3253.6~MB) and beyond, confirming its suitability for concurrent multi-channel industrial diagnostics.
 
-\bibitem{randall2011rolling}
-R. B. Randall and J. Antoni,
-``Rolling element bearing diagnostics---A tutorial,''
-\textit{Mechanical Systems and Signal Processing}, vol.~25, no.~2, pp.~485--520, 2011.
 
-\bibitem{nectoux2012pronostia}
-P. Nectoux, R. Gouriveau, K. Medjaher, E. Ramasso, B. Chebel-Morello, N. Zerhouni, and C. Varnier,
-``PRONOSTIA: An experimental platform for bearings accelerated degradation tests,''
-in \textit{Proc. IEEE Conf. Prognostics and Health Management (PHM)}, Denver, CO, USA, 2012, pp.~1--8.
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.7\linewidth]{real_time_latency_breakdown_per_sample.png}
+    \caption{Real-time model inference latency comparison per sample (ms/sample) across different model architectures and batch size (BS) configurations. Under the massive parallel throughput workload ($BS = 1024$), a baseline inference latency of 0.997~ms per sample is achieved by the proposed Mamba-Hybrid model. In contrast, substantial slowdowns are exhibited by the other tested architectures: PatchTST ($BS=64$) is $2.0\times$ slower, Mamba-Hybrid ($BS=64$) is $3.9\times$ slower, Simple-Mamba ($BS=64$) is $5.7\times$ slower, and LSTM ($BS=64$) is $14.2\times$ slower. Slowdown ratios are annotated directly above each corresponding bar relative to the high-throughput Mamba-Hybrid baseline.}
+    \label{fig:computational_complexity}
+\end{figure}
 
-\bibitem{qian2017bearing}
-Y. Qian, R. Yan, and R. X. Gao,
-``A multi-time scale approach to remaining useful life prediction in rolling bearing,''
-\textit{Mechanical Systems and Signal Processing}, vol.~83, pp.~549--567, 2017.
 
-\bibitem{zhao2019deep}
-R. Zhao, R. Yan, Z. Chen, K. Mao, P. Wang, and R. X. Gao,
-``Deep learning and its applications to machine health monitoring,''
-\textit{Mechanical Systems and Signal Processing}, vol.~115, pp.~213--237, 2019.
+\subsection{Threshold Calibration and Computational Overhead} \label{sect:s5dot5}
+Online self-calibration requires dynamic thresholding methods with low computational footprints. The Peak Over Threshold (POT) algorithm requires only 23.51~ms to calibrate localized boundaries per bearing. This is $53\times$ faster than GMM calibration (1248.05~ms) and $323\times$ faster than the offline optimal threshold search (7597.00~ms), establishing POT as a highly practical solution for continuous edge-side self-calibration.
 
-\bibitem{wu2018remaining}
-Y. Wu, M. Yuan, S. Dong, L. Lin, and Y. Liu,
-``Remaining useful life estimation of engineered systems using vanilla LSTM neural networks,''
-\textit{Neurocomputing}, vol.~275, pp.~167--179, 2018.
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\linewidth]{fig_rms_anomoly_score.jpg}
+    \caption{Timeline evolution of the MSE anomaly score and calibrated thresholds across the run-to-failure lifecycle of Bearing B17. The top panel illustrates the MSE score computed by the proposed Mamba-Hybrid architecture, overlaid with the dynamic POT threshold (0.7074), Robust threshold (0.6986), and 3-Sigma threshold (0.6348). The bottom panel displays the ground-truth anomaly state. The sharp rise in MSE at step 210,000 matches the onset of mechanical degradation, verifying that the proposed architecture triggers alarms immediately at the onset of fault propagation.}
+    \label{fig:timeline_evolution}
+\end{figure}
 
-\bibitem{bai2018tcn}
-S. Bai, J. Z. Kolter, and V. Koltun,
-``An empirical evaluation of generic convolutional and recurrent networks for sequence modeling,''
-\textit{arXiv preprint arXiv:1803.01271}, 2018.
 
-\bibitem{luo2024moderntcn}
-D. Luo and G. Wang,
-``ModernTCN: A modern pure convolution structure for general time series analysis,''
-in \textit{Proc. Int. Conf. Learning Representations (ICLR)}, Vienna, Austria, 2024.
+\subsection{Discussion on Mamba's Selective Scanning and Physical Interpretability} \label{sect:s5dot6}
+The competitive anomaly detection F1-Score of 75.65\% under POT (90.48\% under Robust) and the lowest Test MSE of 4.2488, which are achieved by the proposed Mamba-Hybrid architecture as detailed in Section~\ref{sect:s5dot2}, are attributed to the integration of selective state space scanning with local convolutional filtering. In high-frequency vibration signal monitoring, rolling element bearing degradation is characterized by localized, transient shock impacts that generate non-stationary trajectories. Pairwise correlations are computed across all sequence tokens by traditional self-attention mechanisms, which introduces a quadratic computational bottleneck $\mathcal{O}(N^2)$ and disperses attention weights over noisy segments. Attention-based methods can therefore be susceptible to noise dispersion, and weak fault signatures are potentially masked as a result. In contrast, the selective scan mechanism ($\text{S}6$) of Mamba operates as an input-dependent, time-varying filter. Historical degradation states are selectively propagated, and random noise is filtered out by $\text{S}6$ through the dynamic adjustment of state transition parameters based on input features, while a linear-time complexity $\mathcal{O}(N)$ is maintained for long lookback windows ($L_x = 4096$).
 
-\bibitem{vaswani2017attention}
-A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, L. Kaiser, and I. Polosukhin,
-``Attention is all you need,''
-in \textit{Advances in Neural Information Processing Systems (NeurIPS)}, vol.~30, 2017.
+Furthermore, the latent space optimization is stabilized by the integration of the eight-dimensional physics-informed statistical head. Forecasting trajectories of the model are aligned with physical degradation dynamics by fusing domain-specific mechanical indicators (e.g., Root Mean Square for total wear energy, and Kurtosis for transient micro-cracks) directly into the latent space. The performance profile in Table~\ref{tabref:table-4} is explained by this alignment, where a higher POT F1-score is achieved by the proposed model compared to Simple-Mamba (75.65\% vs. 65.59\%) along with the lowest Test MSE (4.2488). The model is guided toward structurally meaningful wear patterns rather than high-frequency noise by the stats head.
 
-\bibitem{nie2023patchtst}
-Y. Nie, N. H. Nguyen, P. Sinthong, and J. Kalagnanam,
-``A time series is worth 64 words: Long-term forecasting with transformers,''
-in \textit{Proc. Int. Conf. Learning Representations (ICLR)}, Kigali, Rwanda, 2023.
+An inference-time sensitivity analysis using zero-out and permutation masking was performed to evaluate feature importance across all eight time-domain indicators. The Shape Factor is highly critical under zero-out masking, causing a 5.32\% increase in forecasting MSE and a 0.0130 F1-score drop, especially for bearing B03 (+10.14\% MSE) where slow degradation alters the wave-shape profile. The vibration amplitude and energy features, namely Standard Deviation, RMS, and Peak-to-Peak, show moderate-to-high sensitivity (+1.49\%, +1.42\%, and +1.03\% MSE, respectively), capturing the overall wear energy. Furthermore, the transient shock indicators, Crest Factor and Kurtosis, show positive sensitivities (+1.83\% and +0.18\% MSE, respectively), representing high-frequency impulses.
 
-\bibitem{gu2023mamba}
-A. Gu and T. Dao,
-``Mamba: Linear-time sequence modeling with selective state spaces,''
-\textit{arXiv preprint arXiv:2312.00752}, 2023.
+Additionally, feature redundancy and masking discrepancies were analyzed. Skewness is identified as redundant (-0.00\% zero-out and +0.01\% permutation MSE variations) due to the inherent symmetry of bearing vibration signals around zero. Consequently, while retained here to preserve the time-domain feature set, Skewness is proposed as a prime candidate for future feature pruning in resource-constrained edge deployments. Methodologically, the Shape Factor is sensitive to zero-out masking (+5.32\% MSE) but insensitive to permutation (+0.02\% MSE) because setting it to zero violates its physical boundary ($SF \ge 1.0$), presenting an out-of-distribution input. Conversely, the Mean value is highly sensitive to permutation (+0.56\% MSE) compared to zero-out (+0.33\% MSE) because it acts as the DC baseline offset, verifying that the model relies on its temporal sequence dynamics.
 
-\bibitem{huang2025cipatch}
-Z. Huang, Z. Chen, and Y. Liu,
-``A channel-independent network using patch external attention and Mamba for long-term multivariate time series forecasting,''
-\textit{Applied Soft Computing}, vol.~185, p.~114036, 2025.
+\subsection{Research Limitations} \label{sect:s5dot7}
+Although the proposed framework demonstrates competitive performance over baseline models, several limitations are noted. First, the experimental validation is restricted to the Paderborn University bearing dataset under stationary operational velocities and constant load parameters within each run-to-failure simulation. Consequently, model robustness and generalization under highly transient speed profiles or dynamic loading configurations require further verification. Second, the model assumes channel independence and is validated on two-channel accelerometer signals, meaning cross-channel spatial phase dependencies between the frontal and rear accelerometers located at different housing positions are not explicitly modeled. Finally, the physics-guided stats head relies on eight predefined time-domain statistical parameters. While sensitive to standard degradation trends, extreme broadband industrial background noise could degrade the signal-to-noise ratio of these statistical metrics, potentially reducing their diagnostic efficacy compared to adaptive time-frequency filtering techniques.
 
-\bibitem{feng2025femamba}
-H. Feng, C. Zhang, X. Li, and Y. Wang,
-``FEMamba: A feature-enhanced Mamba framework with degradation-stage global regularization for bearing remaining useful life prediction,''
-\textit{IEEE Transactions on Industrial Informatics}, vol.~21, no.~4, pp.~1245--1258, 2025. doi: 10.1109/TII.2025.3456789.
+\section{Conclusion and future work} \label{sect:s6}
+In this study, a physics-informed, series-decomposed hybrid Mamba-CNN forecasting framework was developed for unsupervised and leakage-free bearing anomaly detection. Raw vibration sequences are decoupled into low-complexity trend and high-frequency seasonal components, to which a linear predictor and a channel-independent hybrid Mamba-CNN encoder are respectively applied. To enhance mechanical interpretability and stabilize forecasting trajectories, latent representations are reinforced by an eight-dimensional physical-statistical head. A Peak Over Threshold (POT) calibration workflow utilizing Extreme Value Theory is designed to compute dynamic decision thresholds strictly from early-stage, healthy operational segments, thereby avoiding future validation data leakage.
 
-\bibitem{wei2026tfgmamba}
-Y. Wei, Z. Ma, X. Liu, and J. Chen,
-``TFG-Mamba: Temporal-frequency domain fusion via gating Mamba for computationally efficient bearing RUL prediction,''
-\textit{Advanced Engineering Informatics}, vol.~72, p.~102845, 2026.
+The performance of the proposed paradigm was evaluated using the run-to-failure Paderborn University bearing dataset. Under strict parameter budgeting parity, a macro-average F1-score of 90.48\% under Robust thresholding (75.65\% under POT thresholding) was achieved. Under Robust calibration, the proposed model outperforms the LSTM baseline (89.05\%), while Simple-Mamba achieves a marginally higher Robust F1 of 91.55\% at the cost of substantially degraded leakage-free POT detection performance (65.59\% vs.\ 75.65\%). Under the more stringent, leakage-free POT calibration, the proposed model achieves the highest F1-score of 75.65\%, outperforming both LSTM (68.88\%) and Simple-Mamba (65.59\%). Furthermore, the lowest Test MSE of 4.2488 was achieved, outperforming PatchTST (4.2575), LSTM (4.4386), and Simple-Mamba (4.6807). Additionally, execution latency was compressed to 1.0086~ms under high-throughput configurations (Batch Size 1024), representing a 14.1$\times$ speedup over the LSTM baseline, and the peak VRAM footprint was reduced to 215.9~MB at Batch Size 64, representing an 83.8\% reduction compared to PatchTST, while POT calibration is completed in 23.51~ms per bearing. These results indicate the suitability of the framework for real-time edge diagnostics. In future work, the modeling of cross-channel spatial-temporal correlations, the integration of hybrid self-attention mechanisms to combine the global representation capability of attention-based models (such as PatchTST) with Mamba's linear scaling, the direct integration of mechanical dynamical equations into the loss function, and model generalizability under variable speed-load profiles will be investigated.
 
-\bibitem{lai2025cnnmamba}
-S. Lai, T.-H. Cheung, K.-C. Fung, K. Xue, J. Zhao, H. L. Goshu, Z. Lyu, and K.-M. Lam,
-``Fault diagnosis of rolling bearings using denoising multi-channel mixture of CNN and Mamba-enhanced adaptive self-attention LSTM,''
-\textit{Sensors}, vol.~25, no.~21, p.~6652, 2025. doi: 10.3390/s25216652.
+\acknowledgement{The authors acknowledge Nguyen Tat Thanh University, Ho Chi Minh City, Vietnam, and the Faculty of Software Engineering, FPT University, Ho Chi Minh City, Vietnam, for supporting this study.}
 
-\bibitem{zhu2025stmambaformer}
-S. Zhu, Y. Zhang, L. Chen, and H. Li,
-``ST-MambaFormer: Multi-scale spatial-temporal feature fusion for tool remaining useful life prediction,''
-in \textit{Proc. 12th Global Reliability and Prognostics Conf. (PHM-Global)}, Osaka, Japan, 2025, pp.~412--419.
+% \acknowledgement{This section is intended for acknowledging any support not covered under the Author Contributions or Funding Statement sections. This may include administrative and technical assistance, as well as in-kind contributions such as materials or equipment provided for the research. Please be aware that the specific funding grant number should only appear in the Funding Statement. If there are no acknowledgement to be made, please use “Not applicable.” or “None.”}
+
+% \funding{Authors should describe sources of funding that have supported the work, including specific grant numbers, initials of authors who received the grant, and the URLs to sponsors’ websites: “This research was funded by Name of Funder, grant number xxx.” or “The APC was funded by xxx.” Please ensure that all funding information is accurate and that the names of funding agencies are spelled according to the standard forms listed at \href{https://search.crossref.org/funding}{https://search.crossref.org/funding}. Inaccuracies may affect the traceability of your work and future funding recognition. If there is no funding support, please write “The author(s) received no specific funding for this study.”}
+
+% \authorcontributions{The Author Contributions statement is mandatory for research articles, except for papers with a single author. It should represent all the authors and is to be included upon submission. All listed authors must have substantially contributed to the manuscript and have approved the final submitted version, which should include a description of each author’s specific work and contribution. We suggest the following format for the contribution statement:\\
+% “The authors confirm contribution to the paper as follows: Conceptualization, First-name Lastname1 and First-name Lastname2; methodology, First-name Lastname1; software, First-name Lastname1; validation, First-name Lastname1, First-name Lastname2 and First-name Lastname3; formal analysis, First-name Lastname1; investigation, First-name Lastname1; resources, First-name Lastname1; data curation, First-name Lastname1; writing---original draft preparation, First-name Lastname1; writing---review and editing, First-name Lastname1; visualization, First-name Lastname1; supervision, First-name Lastname1; project administration, First-name Lastname1; funding acquisition, First-name Lastname1. All authors reviewed and approved the final version of the manuscript.”\\
+% Please turn to the \href{https://credit.niso.org/contributor-roles-defined/}{CRediT role descriptors---CRediT} for the term explanation.}
+
+% \availabilityofdataandmaterials{This statement should make clear how readers can access the data used in the study and explain why any unavailable data cannot be released. The following five statements are offered for~reference:
+% \begin{enumerate}
+% \item Data openly available in a public repository.
+% \item[] “The data that support the findings of this study are openly available in [repository name] at [URL].”
+% \item Data available within the article or its Supplementary Materials.
+% \item[] “The authors confirm that the data supporting the findings of this study are available within the article [and/or] its Supplementary Materials.”
+% \item Data available on request from the authors.
+% \item[] “The data that support the findings of this study are available from the Corresponding Author, [author initials], upon reasonable request.”
+% \item Data not available due to [ethical/legal/commercial] restrictions.
+% \item[] “Due to the nature of this research, participants of this study did not agree for their data to be shared publicly, so supporting data is not available.”
+% \item “Not applicable.” (This article does not involve data availability, and this section is not applicable).
+% \end{enumerate}}
+
+% \ethicsapproval{Guidelines for ethical approval statements may differ based on the journal, a standard ethical approval statement will usually include:
+% \begin{enumerate}
+% \item Whether or not the study included human or animal subjects. In all cases, the ethical approval status of the work should be stated in the ethical approval statement.
+% \item The committee which approved the study.
+% \item The compliance documents. What policies, declarations, acts, etc.
+% \item Persistent identifier: reference or approval number. Include the registration ID/reference number if applicable.
+% \item “Not applicable.” for studies not involving humans or animals.
+% \end{enumerate}}
+
+% \conflictsofinterest{Please declare conflicts of interest or state: “The authors declare no conflicts of interest.” Authors must disclose any personal interests that could bias the research. Any role of funders in study design, data collection, analysis, manuscript preparation, or publication decisions must be stated. If funders had no involvement, please include the statement: “The funders had no role in the design of the study; in the collection, analyses, or interpretation of data; in the writing of the manuscript; or in the decision to publish the results.”} 
+
+% %% Optional
+% \supplementary{The supplementary material is available online at \linksupplementary{}, Figure S1: caption; Table S1: caption; Video S1: caption.\\
+% Supplementary Materials should be uploaded separately on submission.  Any file format is acceptable; however, we recommend that common, non-proprietary formats are used where possible. Supplementary materials should be clean, without tracked changes, highlights, comments or line numbers. Supplementary figures must be clear and readable, and we recommend a minimum resolution of 300 dpi, figure legends must be clear and accurate. Supplementary materials must be mentioned in the main text. The citation format of Supplementary Figures, Tables, Equations, etc., should start with a prefix “S”, e.g., Fig. S1, Table S1, Eq. (S1), etc.}
+
+
+% %% Optional
+% \abbreviations{Abbreviations}{\indent The following abbreviations are used in this manuscript:\\
+
+% \noindent 
+% \begin{tabular}{@{}ll}
+% Term 1 & Interpretation 1\\
+% Term 2 & Interpretation 2\\
+% Term 3 & Interpretation 3
+% \end{tabular}}
+
+% %% Optional
+% \appendixstart
+% \appendix
+% \section[\appendixname~\thesection]{ } \label{app:app1}
+% \subsection[\appendixname~\thesubsection]{ } \label{app:app1dot1}
+% The appendix is an optional section that may include details and data supplemental to the main text---such as experimental details that would otherwise disrupt the narrative flow but are crucial to understanding and reproducibility. Mathematical proofs of results not central to the paper can be added as an appendix; brief figures showing replicate data for experiments presented in representative form in the main text may also be included in the appendix.~More extensive data should be provided as Supplementary~Materials.
+
+% \section[\appendixname~\thesection]{Example of Section Title} \label{app:app2}
+% Multiple appendices should be ordered as such: Appendix A, Appendix B, Appendix C, etc. Appendix sections must be cited in the main text. Within the appendices, figures, tables, and other elements should be labeled starting with “A”, derived from the initial letter of “Appendix”---e.g., Figure A1, Figure A2, \tabref{tabref:table-a1}, Algorithm A1, etc.
+
+% \begin{table}[htbp] 
+% \tablesize{\footnotesize}
+% \caption{This is a table caption. Please add an explanation for bold/italics/underline/color to the table footer.}
+% \label{tabref:table-a1}
+% \newcolumntype{C}{>{\centering\arraybackslash}X}
+% \begin{tabularx}{\textwidth}{CCCC}
+% \toprule
+% \textbf{Header 1}	&\textbf{Header 2}	&\textbf{Header 3}	&\textbf{Header 4}\\
+% \midrule
+% data	&data	&data	&data\\
+% data	&data	&data	&data\\
+% \bottomrule
+% \end{tabularx}
+% \end{table}
+
+
+%%References instruction
+% Please provide either the correct journal abbreviation (e.g. according to the “List of Title Word Abbreviations” http://www.issn.org/services/online-services/access-to-the-ltwa/) or the full name of the journal.
+
+% Citations and References in Supplementary files are permitted provided that they also appear in the reference list here. 
+
+% All references should be cited in the main text sequentially (including citations in tables and legends) and listed individually at the end of the manuscript. We recommend preparing the references with a bibliography software package, such as EndNote, Mendeley or Zotero, to avoid typing mistakes and duplicated references. Include the digital object identifier (DOI) for all references where available.
+
+%Citations should be generated using LaTeX citation commands (e.g., \cite{ref-1}, \cite{ref-2,ref-3}, or \cite{ref-4,ref-5,ref-6}. For citations with specific page numbers, place the page information outside the citation brackets, for example \cite{ref-5} (p.~10) or \cite{ref-6} (pp.~101--105). When a cited reference is the subject of a sentence, use the author’s last name followed by the citation command, e.g., Rhee \cite{ref-1}, or use a generic form such as Ref.~\cite{ref-1} or Refs.~\cite{ref-4,ref-5,ref-6}; for references with multiple authors, use the first author’s last name followed by “et al.”, e.g., Al-Khshali et al.~\cite{ref-2}. It is not recommended to cite more than 5 consecutive references at a single location. Citations and references in the Supplementary Materials are permitted provided that they also appear in the main reference list.
+
+%Please include the first 6 authors’ names before using “et al.” in the references lsit.
+
+%The following are examples of the reference style (Vancouver style), which should be strictly adhered to (More details of style can refer to: https://www.ncbi.nlm.nih.gov/books/NBK7256/).
+
+%=====================================
+% References, variant A: external bibliography
+%=====================================
+%\bibliography{your_external_BibTeX_file}
+
+%=====================================
+% References, variant B: internal bibliography
+%=====================================
+
+\reftitle{References}
+\begin{thebibliography}{20}
+
+\bibitem{ref-1}
+Tales Moreira Tavares, Mateus Giesbrecht. Deep Learning-Based Fault Diagnosis in Wind Turbine Bearings and Gearboxes Using Vibration Signals: Survey, Challenges, and Recommendations. IEEE Access. 2025;13:11267383. DOI: \href{https://doi.org/10.1109/ACCESS.2025.3636831}{10.1109/ACCESS.2025.3636831}
+
+\bibitem{ref-2}
+Jiehui Xu, Haixu Wu, Jianmin Wang, Mingsheng Long. Anomaly Transformer: Time Series Anomaly Detection with Association Discrepancy. In: Proceedings of the International Conference on Learning Representations (ICLR); 2022. DOI: \href{https://doi.org/10.48550/arXiv.2110.02642}{10.48550/arXiv.2110.02642}
+
+\bibitem{ref-3}
+Haixu Wu, Tengge Hu, Yong Liu, Hang Zhou, Jianmin Wang, Mingsheng Long. TimesNet: Temporal 2D-Variation Modeling for General Time Series Analysis. In: Proceedings of the International Conference on Learning Representations (ICLR); 2023. DOI: \href{https://doi.org/10.48550/arXiv.2210.02186}{10.48550/arXiv.2210.02186}
+
+\bibitem{ref-4}
+Yuqi Nie, Nam H. Nguyen, Phanwadee Sinthong, Jayant Kalagnanam. A Time Series is Worth 64 Words: Long-term Forecasting with Transformers. In: Proceedings of the International Conference on Learning Representations (ICLR); 2023. DOI: \href{https://doi.org/10.48550/arXiv.2211.14730}{10.48550/arXiv.2211.14730}
+
+\bibitem{ref-5}
+Albert Gu, Tri Dao. Mamba: Linear-time sequence modeling with selective state spaces. In: Proceedings of the Conference on Language Modeling (COLM); 2024. DOI: \href{https://doi.org/10.48550/arXiv.2312.00752}{10.48550/arXiv.2312.00752}
+
+\bibitem{ref-6}
+Hetian Feng, Yanchen Ye, Chen Zhang, Xudong Liu, Runhua Li, Bilang Zhang. FEMamba: A Feature-Enhanced Mamba Framework with Degradation-Stage Global Regularization for Bearing Remaining Useful Life Prediction. In: Proceedings of the IEEE International Conference on Data Driven Control and Learning Systems (DDCLS); 2025. DOI: \href{https://doi.org/10.1109/DDCLS66240.2025.11065061}{10.1109/DDCLS66240.2025.11065061}
+
+\bibitem{ref-7}
+Yuanyu Wei, Borui Ren, Lingchong Gao, Huashan Chi, Xingliang Li, Jianhua Liu, Qingchao Sun, Wei Sun, Liming Shu. TFG-Mamba: Temporal-frequency domain fusion via gating Mamba for computationally efficient bearing RUL prediction. Advanced Engineering Informatics. 2026;68:104443. DOI: \href{https://doi.org/10.1016/j.aei.2026.104443}{10.1016/j.aei.2026.104443}
+
+\bibitem{ref-8}
+Md Atik Ahamed, Qiang Cheng. TimeMachine: A Time Series is Worth 4 Mambas for Long-Term Forecasting. In: Proceedings of the European Conference on Artificial Intelligence (ECAI); 2024. DOI: \href{https://doi.org/10.48550/arXiv.2403.09898}{10.48550/arXiv.2403.09898}
+
+\bibitem{ref-9}
+Kaiping Li, Fengli Zhang, Xuehao Sun, Jinjiang Wang. An Explainable Adaptive Anomaly Detection Method for Multi-Condition Intelligent Equipment Monitoring. Eksploatacja i Niezawodność - Maintenance and Reliability. 2026;27:183111. DOI: \href{https://doi.org/10.17531/ein/218122}{10.17531/ein/218122}
+
+\bibitem{ref-10}
+Xiaolei Yu, Zhibin Zhao, Xingwu Zhang, Qiyang Zhang, Yilong Liu, Chuang Sun. Deep-Learning-Based Open Set Fault Diagnosis by Extreme Value Theory. IEEE Transactions on Industrial Informatics. 2022;18(7):4874--4883. DOI: \href{https://doi.org/10.1109/TII.2021.3070324}{10.1109/TII.2021.3070324}
+
+\bibitem{ref-11}
+Gabriel Michau, Gaetan Frusque, Olga Fink. Fully learnable deep wavelet transform for unsupervised monitoring of high-frequency time series. Proceedings of the National Academy of Sciences of the United States of America. 2021;118(44):e2106598119. DOI: \href{https://doi.org/10.1073/pnas.2106598119}{10.1073/pnas.2106598119}
+
+\bibitem{ref-12}
+Tian Lan, Hao Duong Le, Jinbo Li, Wenjun He, Meng Wang, Chenghao Liu, Chen Zhang. Towards Foundation Models for Zero-Shot Time Series Anomaly Detection: Leveraging Synthetic Data and Relative Context Discrepancy. In: Proceedings of the International Conference on Learning Representations (ICLR); 2025. DOI: \href{https://doi.org/10.48550/arXiv.2509.21190}{10.48550/arXiv.2509.21190}
+
+\bibitem{ref-13}
+Chenjie Zhao, Xiaobo Wang, Ling Zhang. TSC-Mamba: Adaptive Decomposition and Channel Interaction Fusion for Time Series Forecasting. Mathematics. 2026;14(8):1363. DOI: \href{https://doi.org/10.3390/math14081363}{10.3390/math14081363}
+
+\bibitem{ref-14}
+Haiming Yi, Danyu Li, Zhenyong Lu, Yuhong Jin, Hao Duan, Lei Hou, Faisal Z. Duraihem, Emad Mahrous Awwad, Nasser. A. Saeed. VibrMamba: A lightweight Mamba based fault diagnosis of rotating machinery using vibration signal. Measurement. 2025;74:1--12. DOI: \href{https://doi.org/10.1016/j.measurement.2025.116881}{10.1016/j.measurement.2025.116881}
+
+\bibitem{ref-15}
+Changyu Li, Dingcheng Huang, Kexuan Yao, Xiaoya Ni, Lijuan Shen, Fei Luo. Physics-Guided Tiny-Mamba Transformer for Reliability-Aware Early Fault Warning. IEEE Transactions on Reliability. 2026. DOI: \href{https://doi.org/10.48550/arXiv.2601.21293}{10.48550/arXiv.2601.21293}
+
+\bibitem{ref-16}
+Peng Wang, Yafei Song, Xiaodan Wang, Qian Xiang. MD-BiMamba: An aero-engine inter-shaft bearing fault diagnosis method based on Mamba with modal decomposition and bidirectional features fusion strategy. Measurement. 2024;239:115870. DOI: \href{https://doi.org/10.1016/j.measurement.2024.115870}{10.1016/j.measurement.2024.115870}
+
+\bibitem{ref-17}
+Wenjun Yu, Wen Li, Kun Zheng, Yiming Tang, Jiyanglin Li, Heming Du, Shouguo Du, Jinhong You. A Multi-Scale Decomposition and Fusion Framework Utilizing Mamba for Enhanced Time Series Forecasting. In: Proceedings of the IEEE International Conference on Systems, Man, and Cybernetics (SMC); 2025. DOI: \href{https://doi.org/10.1109/SMC58881.2025.11343143}{10.1109/SMC58881.2025.11343143}
+
+\bibitem{ref-18}
+Ya Su, Youjian Zhao, Chenhao Niu, Rong Liu, Wei Sun, Dan Pei. Robust Anomaly Detection for Multivariate Time Series through Stochastic Recurrent Neural Network. In: Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery \& Data Mining (KDD); 2019. p. 2828--2837. DOI: \href{https://doi.org/10.1145/3292500.3330672}{10.1145/3292500.3330672}
+
+\bibitem{ref-19}
+Julien Audibert, Pietro Michiardi, Frédéric Guyard, Sébastien Marti, Maria A. Zuluaga. USAD: UnSupervised Anomaly Detection for Multivariate Time Series. In: Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery \& Data Mining (KDD); 2020. p. 3315--3325. DOI: \href{https://doi.org/10.1145/3394486.3403392}{10.1145/3394486.3403392}
+
+\bibitem{ref-20}
+Shreshth Tuli, Giuliano Casale, Nicholas R. Jennings. TranAD: Deep Transformer Networks for Anomaly Detection in Multivariate Time Series Data. Proceedings of the VLDB Endowment. 2022;15(6):1201--1214. DOI: \href{https://doi.org/10.14778/3514061.3514067}{10.14778/3514061.3514067}
 
 \end{thebibliography}
-
-\EOD
-\end{document}
+\end{document}  

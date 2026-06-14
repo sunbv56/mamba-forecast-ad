@@ -13,7 +13,13 @@ class Trainer:
         self.config = config
         self.device = config['training'].get('device', 'cuda' if torch.cuda.is_available() else 'cpu')
         self.model.to(self.device)
-        self.criterion = nn.MSELoss()
+        loss_type = config['training'].get('loss_type', 'huber')
+        if loss_type == 'huber':
+            self.criterion = nn.HuberLoss(delta=1.0)
+        elif loss_type == 'mse':
+            self.criterion = nn.MSELoss()
+        else:
+            raise ValueError(f"Unknown loss type: {loss_type}. Choose 'mse' or 'huber'.")
         
         self.save_dir = config['training'].get('save_dir', 'results/models')
         os.makedirs(self.save_dir, exist_ok=True)

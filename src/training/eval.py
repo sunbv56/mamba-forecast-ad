@@ -352,6 +352,7 @@ def evaluate_model(name, model, test_loader, config, device):
         'name': name,
         'f1_3s': float(np.mean(macro_metrics["3-Sigma"]["F1"])),
         'f1_rb': float(np.mean(macro_metrics["Robust"]["F1"])),
+        'far_rb': float(np.mean(macro_metrics["Robust"]["FAR"])),
         'f1_pot': float(np.mean(macro_metrics["POT"]["F1"])),
         'auc': float(np.mean(macro_metrics["POT"]["AUC"])),
         'far_pot': float(np.mean(macro_metrics["POT"]["FAR"])),
@@ -404,7 +405,7 @@ def main():
 
     window_stride = config['data'].get('window_stride', 1024)
     lookback = config['data'].get('lookback', 4096)
-    horizon = config['data'].get('horizon', 1024)
+    horizon = config['data'].get('horizon', 512)
     sampling_rate = config['data'].get('sampling_rate', 128000)
     
     # Model patching params
@@ -462,9 +463,10 @@ def main():
                     'stride': patch_stride,
                     'trend_downsample': trend_downsample,
                     'in_channels': 2, 'lookback': lookback,
-                    'decomp_kernel': config['model'].get('decomp_kernel', 25), 
-                    'use_multiscale': config['model'].get('use_multiscale', True),
-                    'use_revin': config['model'].get('use_revin', True),
+                    'decomp_alpha':    config['model'].get('decomp_alpha', 0.1),
+                    'decomp_learnable': config['model'].get('decomp_learnable', True),
+                    'use_multiscale': config['model'].get('use_multiscale', False),
+                    'use_revin': config['model'].get('use_revin', False),
                     'use_decomposition': config['model'].get('use_decomposition', True),
                     'use_stats': config['model'].get('use_stats', True),
                 },

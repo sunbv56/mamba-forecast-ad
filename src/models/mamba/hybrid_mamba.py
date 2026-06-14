@@ -48,10 +48,11 @@ class HybridMambaCNN(nn.Module):
         d_model      = model_cfg['mamba_d_model']
         forecast_len = model_cfg['forecast_len']
         lookback     = model_cfg.get('lookback', data_cfg.get('lookback', 1024))
-        decomp_kernel = model_cfg.get('decomp_kernel', 25)
+        decomp_alpha    = model_cfg.get('decomp_alpha', 0.1)
+        decomp_learnable = model_cfg.get('decomp_learnable', True)
 
         # --- Ablation Study Toggles ---
-        self.use_revin = model_cfg.get('use_revin', True)
+        self.use_revin = model_cfg.get('use_revin', False)
         self.use_decomposition = model_cfg.get('use_decomposition', True)
         self.use_stats = model_cfg.get('use_stats', True)
 
@@ -63,12 +64,12 @@ class HybridMambaCNN(nn.Module):
         # ------------------------------------------------------------------
         # 2. Series Decomposition
         # ------------------------------------------------------------------
-        self.decomp = SeriesDecomposition(kernel_size=decomp_kernel)
+        self.decomp = SeriesDecomposition(alpha=decomp_alpha, learnable=decomp_learnable)
 
         # ------------------------------------------------------------------
         # 3a. Seasonal Branch — Multi-scale Patch + Mamba
         # ------------------------------------------------------------------
-        use_multiscale = model_cfg.get('use_multiscale', True)
+        use_multiscale = model_cfg.get('use_multiscale', False)
         if use_multiscale:
             self.patching = MultiScalePatchEmbedding(
                 patch_size=patch_size,

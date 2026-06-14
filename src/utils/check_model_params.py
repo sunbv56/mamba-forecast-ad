@@ -195,7 +195,8 @@ def main():
                 'trend_downsample': trend_downsample,
                 'in_channels': 2,
                 'lookback': lookback,
-                'decomp_kernel': config['model'].get('decomp_kernel', 25),
+                'decomp_alpha':    config['model'].get('decomp_alpha', 0.1),
+                'decomp_learnable': config['model'].get('decomp_learnable', True),
                 'use_multiscale': True,
             },
             'data': {'patch_size': patch_size, 'stride': patch_stride, 'lookback': lookback}

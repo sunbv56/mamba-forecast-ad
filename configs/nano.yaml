@@ -6,7 +6,7 @@ data:
   train_datasets: ["data/processed/B02", "data/processed/B05"]
   test_datasets: ["data/processed/B02", "data/processed/B03", "data/processed/B04", "data/processed/B05"]
   sampling_rate: 128000
-  highpass_freq: 2000
+  highpass_freq: 0
   label_strategy: 'manual' # 3sigma, rms, or manual
   manual_fault_start:
     B01: 212
@@ -21,11 +21,13 @@ data:
     B17: 2187
   window_stride: 1024
   lookback: 4096
-  horizon: 1024
+  horizon: 512
   skip_ratio: 0.05
   train_ratio: 0.4
 
 model:
+  use_multiscale: false
+  use_revin: false
   patch_size: 16  
   patch_stride: 8
   trend_downsample: 64
@@ -34,7 +36,7 @@ model:
   mamba_n_layer: 4 
   mamba_d_state: 16
   mamba_d_conv: 3
-  mamba_expand: 3
+  mamba_expand: 4
   bidirectional: false
   decomp_kernel: 25 
   auto_scale_baselines: true

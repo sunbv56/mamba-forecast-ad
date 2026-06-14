@@ -5,16 +5,44 @@ import unicodedata
 
 # Helper functions for LaTeX math processing and normalization
 def clean_latex_formatting(text):
-    # Fix backslash spacing: "\ alpha" -> "\alpha"
-    text = re.sub(r'\\\s+([a-zA-Z]+)', r'\\\1', text)
+    # Fix backslash spacing: "\ alpha" -> "\alpha", "\ timesC" -> "\times C", "\timesC" -> "\times C"
+    def fix_backslash_space(match):
+        word = match.group(1)
+        valid_commands = {
+            'times', 'in', 'mathbb', 'text', 'mathrm', 'alpha', 'beta', 'gamma', 
+            'delta', 'Delta', 'epsilon', 'theta', 'lambda', 'mu', 'nu', 'xi', 
+            'pi', 'rho', 'sigma', 'Sigma', 'tau', 'phi', 'omega', 'eta', 'chi', 
+            'psi', 'approx', 'le', 'ge', 'sum', 'int', 'sqrt', 'frac', 'cdot', 
+            'hat', 'bar', 'tilde', 'vec', 'sin', 'cos', 'tan', 'log', 'exp', 
+            'min', 'max', 'lim', 'textbf', 'textit', 'texttt', 'textsf', 'mathbf',
+            'mathit', 'mathsf', 'mathtt', 'left', 'right', 'label', 'ref'
+        }
+        if word in valid_commands:
+            return '\\' + word
+            
+        # Find the longest matching command prefix
+        sorted_cmds = sorted(list(valid_commands), key=len, reverse=True)
+        for cmd in sorted_cmds:
+            if word.startswith(cmd) and len(word) > len(cmd):
+                rest = word[len(cmd):]
+                if rest[0].isalpha():
+                    return '\\' + cmd + ' ' + rest
+        return '\\' + word
+
+    text = re.sub(r'\\\s*([a-zA-Z]+)', fix_backslash_space, text)
     
     # Fix spacing around subscripts and superscripts: "x _ i" -> "x_i", "N ^ 2" -> "N^2"
     text = re.sub(r'(\w+|\\?\w+)\s*_\s*(\w+|\{[^{}]+\})', r'\1_\2', text)
     text = re.sub(r'(\w+|\\?\w+)\s*\^\s*(\w+|\{[^{}]+\})', r'\1^\2', text)
     
     # Fix spaces inside braces of subscripts and superscripts: "_{ t - 1 }" -> "_{t-1}"
-    text = re.sub(r'_(?:\{([^}]+)\})', lambda m: '_{' + m.group(1).replace(' ', '') + '}', text)
-    text = re.sub(r'\^(?:\{([^}]+)\})', lambda m: '^{' + m.group(1).replace(' ', '') + '}', text)
+    def clean_braces_content(content):
+        # Remove spaces except those after a backslash command
+        pattern = re.compile(r'(\\[a-zA-Z]+)\s+|(\s+)')
+        return pattern.sub(lambda m: m.group(1) + ' ' if m.group(1) else '', content)
+
+    text = re.sub(r'_(?:\{([^}]+)\})', lambda m: '_{' + clean_braces_content(m.group(1)) + '}', text)
+    text = re.sub(r'\^(?:\{([^}]+)\})', lambda m: '^{' + clean_braces_content(m.group(1)) + '}', text)
     
     # Standardize complexities: "O ( N 2 )" or "O ( N )" or "O ( 1 )"
     text = re.sub(r'[oO]\s*\(\s*N\s*(?:\^?\s*2|²)?\s*\)', 'O(N^2)', text)
@@ -116,16 +144,19 @@ def convert_markdown_bold_italic(text):
     # We keep markdown styling in plain text so it can be copied cleanly as rich HTML format.
     return text
 
-def markdown_to_html(text):
+def markdown_to_html(text, font_size=10):
     import html as html_module
     
-    # 1. Extract math blocks and convert them to Cambria Math spans, storing them as placeholders
+    # 1. Extract math blocks and convert them to SimSun spans, storing them as placeholders
     placeholders = []
+    # Math font size is scaled proportionally (always slightly larger for SimSun)
+    math_font_size = font_size + 2
+    
     def store_math_placeholder(m):
         formula = m.group(1)
         # Escape HTML special chars inside the formula (e.g. <, >, &)
         escaped_formula = html_module.escape(formula)
-        span = f'<span style="font-family: \'Cambria Math\', serif; font-size: 13pt; background-color: transparent;">{escaped_formula}</span>'
+        span = f'<span style="font-family: \'SimSun\'; font-size: {math_font_size}pt; background-color: transparent;">{escaped_formula}</span>'
         placeholders.append(span)
         # Use an alphanumeric placeholder format with no underscores or asterisks to avoid Markdown match
         return f"PHMATHSPAN{len(placeholders)-1}X"
@@ -154,7 +185,8 @@ def markdown_to_html(text):
     for i, ph in enumerate(placeholders):
         html = html.replace(f"PHMATHSPAN{i}X", ph)
         
-    return html
+    # Wrap in container span with selected font size
+    return f'<span style="font-family: \'Times New Roman\', serif; font-size: {font_size}pt; background-color: transparent;">{html}</span>'
 
 def set_clipboard_html_and_text(html_content, plain_text):
     try:
@@ -441,12 +473,36 @@ def convert_html_to_markdown(html_data):
     return text.strip()
 
 # Core text cleaning algorithm
-def clean_pdf_text(text, unwrap=True, remove_hyphens=True, norm_spaces=True, fix_ligatures=True, clean_latex=True, to_unicode_math=False):
+def clean_pdf_text(text, unwrap=True, remove_hyphens=True, norm_spaces=True, fix_ligatures=True, clean_latex=True, to_unicode_math=False, remove_pipes=True):
     if not text:
         return ""
         
     # 1. Normalize unicode (combines decomposed characters, fixing Vietnamese font issues)
     text = unicodedata.normalize('NFC', text)
+    
+    # 1.5 Remove table pipes if enabled, protecting existing math formulas from losing internal pipes (e.g. absolute values)
+    if remove_pipes:
+        placeholders = []
+        def store_math_placeholder(m):
+            placeholders.append(m.group(0))
+            return f"___MATH_PIPE_PH_{len(placeholders)-1}___"
+            
+        text = re.sub(r'\$\$.*?\$\$', store_math_placeholder, text, flags=re.DOTALL)
+        text = re.sub(r'\$.*?\$', store_math_placeholder, text)
+        
+        lines = text.split('\n')
+        for i, line in enumerate(lines):
+            # Remove leading | and any spaces after it
+            line = re.sub(r'^\s*\|\s*', '', line)
+            # Remove trailing | and any spaces before it
+            line = re.sub(r'\s*\|\s*$', '', line)
+            # Replace remaining | with a single space
+            line = re.sub(r'\s*\|\s*', ' ', line)
+            lines[i] = line
+        text = '\n'.join(lines)
+        
+        for i, ph in enumerate(placeholders):
+            text = text.replace(f"___MATH_PIPE_PH_{i}___", ph)
     
     # 2. Fix common PDF ligatures (which often render as weird single characters)
     if fix_ligatures:
@@ -696,6 +752,7 @@ class PDFTextCleanerApp:
         self.var_clean_latex = tk.BooleanVar(value=True)
         self.var_unicode_math = tk.BooleanVar(value=False)
         self.var_autoclean = tk.BooleanVar(value=True)
+        self.var_remove_pipes = tk.BooleanVar(value=True)
         
         # Checkbox widgets
         cb_unwrap = tk.Checkbutton(
@@ -752,7 +809,36 @@ class PDFTextCleanerApp:
             activebackground=self.colors["card"], activeforeground=self.colors["accent"],
             font=("Segoe UI", 9, "bold")
         )
-        cb_autoclean.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=2)
+        cb_autoclean.grid(row=2, column=0, sticky=tk.W, pady=2)
+        
+        cb_remove_pipes = tk.Checkbutton(
+            inner_control, text="Xóa ký tự bảng (|)", variable=self.var_remove_pipes,
+            bg=self.colors["card"], fg=self.colors["text"], selectcolor=self.colors["bg"],
+            activebackground=self.colors["card"], activeforeground=self.colors["text"],
+            font=("Segoe UI", 9), command=self.trigger_clean
+        )
+        cb_remove_pipes.grid(row=2, column=1, sticky=tk.W, pady=2)
+        
+        # Cỡ chữ (Font size) control
+        font_frame = tk.Frame(inner_control, bg=self.colors["card"])
+        font_frame.grid(row=2, column=2, sticky=tk.W, pady=2)
+        
+        lbl_font = tk.Label(
+            font_frame, text="Cỡ chữ:", font=("Segoe UI", 9),
+            bg=self.colors["card"], fg=self.colors["text"]
+        )
+        lbl_font.pack(side=tk.LEFT, padx=(0, 5))
+        
+        self.var_font_size = tk.IntVar(value=10)
+        self.sb_font_size = tk.Spinbox(
+            font_frame, from_=8, to=24, textvariable=self.var_font_size,
+            width=3, bg=self.colors["textbox_bg"], fg=self.colors["text"],
+            buttonbackground=self.colors["card"], bd=1, relief=tk.FLAT,
+            font=("Segoe UI", 9), command=self.change_font_size
+        )
+        self.sb_font_size.pack(side=tk.LEFT)
+        self.sb_font_size.bind("<KeyRelease>", lambda e: self.change_font_size())
+        self.sb_font_size.bind("<FocusOut>", lambda e: self.change_font_size())
         
         # Action Buttons frame
         btn_frame = tk.Frame(inner_control, bg=self.colors["card"])
@@ -879,7 +965,8 @@ class PDFTextCleanerApp:
             norm_spaces=self.var_spaces.get(),
             fix_ligatures=self.var_ligatures.get(),
             clean_latex=self.var_clean_latex.get(),
-            to_unicode_math=self.var_unicode_math.get()
+            to_unicode_math=self.var_unicode_math.get(),
+            remove_pipes=self.var_remove_pipes.get()
         )
         
         # For display, strip delimiters so it shows as clean plain text
@@ -920,8 +1007,13 @@ class PDFTextCleanerApp:
         plain_text = re.sub(r'\$\$(.*?)\$\$', r'\1', text, flags=re.DOTALL)
         plain_text = re.sub(r'\$(.*?)\$', r'\1', plain_text)
         
-        # HTML version wraps formulas in Cambria Math via markdown_to_html
-        html_version = markdown_to_html(text)
+        # HTML version wraps formulas in SimSun via markdown_to_html
+        try:
+            current_font_size = self.var_font_size.get()
+        except (tk.TclError, ValueError):
+            current_font_size = 10
+            
+        html_version = markdown_to_html(text, font_size=current_font_size)
         
         success = set_clipboard_html_and_text(html_version, plain_text)
         if not success:
@@ -933,6 +1025,16 @@ class PDFTextCleanerApp:
         self.status_label.config(text=message, fg=color)
         # Clear status message after 3 seconds back to default
         self.root.after(3000, lambda: self.status_label.config(text="Sẵn sàng xử lý dữ liệu.", fg=self.colors["text_muted"]))
+
+    def change_font_size(self):
+        try:
+            size = self.var_font_size.get()
+            if size < 6: size = 6
+            if size > 32: size = 32
+            self.input_text.configure(font=("Segoe UI", size))
+            self.output_text.configure(font=("Segoe UI", size))
+        except (tk.TclError, ValueError):
+            pass
 
 if __name__ == "__main__":
     root = tk.Tk()
