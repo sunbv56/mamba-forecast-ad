@@ -1,6 +1,5 @@
 # Hybrid Mamba-CNN Architecture with Physics-Informed Stats Head for Leakage-Free Bearing Anomaly Detection
 
-[![arXiv](https://img.shields.io/badge/arXiv-2403.09898-B31B1B.svg)](https://arxiv.org/abs/2312.00752)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C_style=flat&logo=pytorch&logoColor=white)](https://pytorch.org)
 [![Mamba](https://img.shields.io/badge/Mamba-State_Space_Model-black)](https://github.com/state-spaces/mamba)
