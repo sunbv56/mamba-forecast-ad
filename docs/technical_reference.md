@@ -98,11 +98,11 @@ Trong đó: $L_x = 4096$ là chiều dài quá khứ, $H = 512$ là chiều dài
 
 Kiến trúc mô hình được xây dựng theo sơ đồ toán học tuần tự sau:
 
-#### Bước 1: Phân tách Chuỗi (Series Decomposition)
-Đầu vào $X \in \mathbb{R}^{B \times C \times L_x}$ được tách thành hai phần: xu hướng tần số thấp (Trend) và dao động tần số cao (Seasonal) bằng bộ lọc trung bình trượt (Moving Average):
+#### Bước 1: Phân tách Chuỗi dựa trên EMA (EMA-based Series Decomposition)
+Đầu vào $X \in \mathbb{R}^{B \times C \times L_x}$ được tách thành hai phần: xu hướng tần số thấp (Trend) và dao động tần số cao (Seasonal) bằng phương pháp trung bình trượt lũy thừa (EMA) với tham số $\alpha$ tự học (learnable):
 
 $$
-X_{\text{trend}} = \text{AvgPool1d}(X, \text{kernel-size}=25)
+X_{\text{trend}}[t] = \alpha \cdot X[t] + (1 - \alpha) \cdot X_{\text{trend}}[t-1]
 $$
 
 $$
@@ -177,10 +177,10 @@ y_{\text{seasonal}} \in \mathbb{R}^{B \times C \times H}
 $$
 
 #### Bước 5: Trộn Thích ứng Học được (Learnable Mixing Layer)
-Nhánh Trend được dự báo riêng bằng lớp Linear siêu nhẹ:
+Nhánh Trend được dự báo riêng bằng lớp Linear siêu nhẹ kết hợp bộ downsampling (sử dụng Pooling trung bình với tham số `trend_downsample` từ cấu hình):
 
 $$
-y_{\text{trend}} = \text{LinearProjection}(\text{AvgPool1d}(X_{\text{trend}})) \in \mathbb{R}^{B \times C \times H}
+y_{\text{trend}} = \text{LinearProjection}(\text{AvgPool1d}(X_{\text{trend}}, \text{kernel-size}=\text{downsample})) \in \mathbb{R}^{B \times C \times H}
 $$
 
 Kết quả cuối cùng $y_{\text{forecast}}$ được trộn thích ứng theo từng kênh $c$ bằng trọng số $\alpha_c$ học được qua hàm Sigmoid:

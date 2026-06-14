@@ -62,16 +62,16 @@ graph TD
 
 Kiến trúc mô hình hoạt động thông qua một chuỗi các bước xử lý toán học tuần tự, được tối ưu hóa sâu sắc ở từng module:
 
-### 4.1. Khối 1: Phân tách chuỗi thích ứng (Series Decomposition)
-Khối này sử dụng cấu trúc trung bình trượt (Moving Average) trực tiếp trên tín hiệu đầu vào $x \in \mathbb{R}^{B \times C \times L}$ để chia tách thành hai phần riêng biệt:
+### 4.1. Khối 1: Phân tách chuỗi dựa trên EMA (EMA-based Series Decomposition)
+Khối này sử dụng phương pháp trung bình trượt lũy thừa (EMA) trực tiếp trên tín hiệu đầu vào $x \in \mathbb{R}^{B \times C \times L}$ để chia tách thành hai phần riêng biệt với tham số $\alpha$ tự học (learnable):
 
-1. **Nhánh Xu hướng (Trend branch):** Trích xuất các biến biến đổi tần số thấp, đại diện cho tiến trình mài mòn từ từ dài hạn của kim loại.
+1. **Nhánh Xu hướng (Trend branch):** Trích xuất các biến biến đổi tần số thấp đại diện cho tiến trình mài mòn từ từ dài hạn của kim loại qua tích lũy EMA:
 
    $$
-   x_{\text{trend}} = \text{AvgPool1d}(x, \text{kernel-size}=25)
+   x_{\text{trend}}[t] = \alpha \cdot x[t] + (1 - \alpha) \cdot x_{\text{trend}}[t-1]
    $$
    
-2. **Nhánh Dao động chu kỳ (Seasonal branch):** Chứa các rung động tần số cao, các xung va đập cơ học tuần hoàn và tiếng ồn vận hành.
+2. **Nhánh Dao động chu kỳ (Seasonal branch):** Chứa các rung động tần số cao, các xung va đập cơ học tuần hoàn và tiếng ồn vận hành:
 
    $$
    x_{\text{seasonal}} = x - x_{\text{trend}}
@@ -159,10 +159,10 @@ Sau khi Mamba Encoder trích xuất vector đặc trưng biểu diễn ngữ c�
 ---
 
 ### 4.5. Khối 5: Trộn thích ứng học được (Learnable Mixing Layer)
-Song song với Seasonal Branch, nhánh Trend được xử lý riêng biệt bằng một bộ downsampling kết hợp lớp chiếu tuyến tính siêu nhẹ:
+Song song với Seasonal Branch, nhánh Trend được xử lý riêng biệt bằng một bộ downsampling kết hợp lớp chiếu tuyến tính siêu nhẹ (sử dụng Pooling trung bình với tham số `trend_downsample` từ cấu hình):
 
 $$
-y_{\text{trend}} = \text{LinearProjection}(\text{AvgPool1d}(x_{\text{trend}})) \in \mathbb{R}^{B \times C \times H}
+y_{\text{trend}} = \text{LinearProjection}(\text{AvgPool1d}(x_{\text{trend}}, \text{kernel-size}=\text{downsample})) \in \mathbb{R}^{B \times C \times H}
 $$
 
 Kết quả đầu ra của hai nhánh được trộn thích nghi ở từng kênh cảm biến bằng một trọng số sigmoid học được:
