@@ -102,7 +102,7 @@ Kiến trúc mô hình được xây dựng theo sơ đồ toán học tuần t�
 Đầu vào $X \in \mathbb{R}^{B \times C \times L_x}$ được tách thành hai phần: xu hướng tần số thấp (Trend) và dao động tần số cao (Seasonal) bằng bộ lọc trung bình trượt (Moving Average):
 
 $$
-X_{\text{trend}} = \text{AvgPool1d}(X, \text{kernel\_size}=25)
+X_{\text{trend}} = \text{AvgPool1d}(X, \text{kernel-size}=25)
 $$
 
 $$
@@ -167,7 +167,7 @@ s_{\text{fused}} = \text{Concat}\Big(s_{\text{flat}}, \text{LinearProjection}(st
 $$
 
 $$
-y_{\text{seasonal\_folded}} = \text{LinearProjection}(s_{\text{fused}} \to H)
+y_{\text{seasonal-folded}} = \text{LinearProjection}(s_{\text{fused}} \to H)
 $$
 
 Sau đó, tiến hành khôi phục lại chiều kênh (Unfolding) để thu được dự báo nhánh Seasonal:
