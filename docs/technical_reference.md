@@ -100,64 +100,95 @@ Kiến trúc mô hình được xây dựng theo sơ đồ toán học tuần t�
 
 #### Bước 1: Phân tách Chuỗi (Series Decomposition)
 Đầu vào $X \in \mathbb{R}^{B \times C \times L_x}$ được tách thành hai phần: xu hướng tần số thấp (Trend) và dao động tần số cao (Seasonal) bằng bộ lọc trung bình trượt (Moving Average):
+
 $$
 X_{\text{trend}} = \text{AvgPool1d}(X, \text{kernel\_size}=25)
 $$
+
 $$
 X_{\text{seasonal}} = X - X_{\text{trend}}
 $$
 
 #### Bước 2: Phân mảnh Đơn Quy mô (Simple Patch Embedding)
 Thành phần Seasonal $X_{\text{seasonal}}$ được chia thành các mảnh (patches) kích thước $P=16$, bước nhảy $S=8$:
+
 $$
 N = \left\lfloor \frac{L_x - P}{S} \right\rfloor + 1
 $$
+
 Mỗi mảnh được chiếu tuyến tính lên không gian ẩn chiều $D$ (với `d_model = 64`):
+
 $$
 s_{\text{seasonal}} \in \mathbb{R}^{B \times C \times N \times D}
 $$
 
 #### Bước 3: Độc lập Kênh & Khối Mamba Encoder (Channel-Independent Mamba)
 Chiều kênh $C$ được đưa vào batch để chia sẻ trọng số và triệt tiêu nhiễu chéo:
-$$s_{\text{folded}} \in \mathbb{R}^{(B \cdot C) \times N \times D}$$
+
+$$
+s_{\text{folded}} \in \mathbb{R}^{(B \cdot C) \times N \times D}
+$$
+
 Đưa qua mạng Mamba Encoder gồm $N_{layer}=4$ khối Selective State Space Model để học tương quan thời gian dài:
-$$h(t) = \mathbf{A}(t) h(t-1) + \mathbf{B}(t) s_{\text{folded}}(t)$$
-$$\hat{s}(t) = \mathbf{C}(t) h(t) + \mathbf{D} s_{\text{folded}}(t)$$
-$$s_{\text{hidden}} \in \mathbb{R}^{(B \cdot C) \times N \times D}$$
+
+$$
+h(t) = \mathbf{A}(t) h(t-1) + \mathbf{B}(t) s_{\text{folded}}(t)
+$$
+
+$$
+\hat{s}(t) = \mathbf{C}(t) h(t) + \mathbf{D} s_{\text{folded}}(t)
+$$
+
+$$
+s_{\text{hidden}} \in \mathbb{R}^{(B \cdot C) \times N \times D}
+$$
 
 #### Bước 4: Hợp nhất Đầu Thông số Vật lý (Physical Stats Head Fusion)
 Để bổ trợ tri thức cơ học và tăng tính tường minh giải thích, $8$ đặc trưng thống kê miền thời gian được trích xuất trực tiếp từ cửa sổ Lookback thô của nhánh tương ứng:
+
 $$
 stats = [\text{Mean}, \text{Std}, \text{RMS}, \text{Peak-to-Peak}, \text{Skewness}, \text{Kurtosis}, \text{Crest Factor}, \text{Shape Factor}]
 $$
+
 Trong đó, **Kurtosis (Độ nhọn)** đóng vai trò quan trọng phát hiện xung va đập chớm lỗi:
+
 $$
 \text{Kurtosis} = \frac{\frac{1}{L_x}\sum_{i=1}^{L_x} (x_i - \mu)^4}{\sigma^4}
 $$
+
 Đặc trưng vật lý được reshape thành dạng folded: $stats_{\text{folded}} \in \mathbb{R}^{(B \cdot C) \times 8}$. Vector ẩn từ Mamba được làm phẳng và concat trực tiếp với đặc trưng vật lý được chiếu tuyến tính:
+
 $$
 s_{\text{flat}} = \text{Flatten}(s_{\text{hidden}}) \in \mathbb{R}^{(B \cdot C) \times (N \cdot D)}
 $$
+
 $$
 s_{\text{fused}} = \text{Concat}\Big(s_{\text{flat}}, \text{LinearProjection}(stats_{\text{folded}})\Big)
 $$
+
 $$
 y_{\text{seasonal\_folded}} = \text{LinearProjection}(s_{\text{fused}} \to H)
 $$
+
 Sau đó, tiến hành khôi phục lại chiều kênh (Unfolding) để thu được dự báo nhánh Seasonal:
+
 $$
 y_{\text{seasonal}} \in \mathbb{R}^{B \times C \times H}
 $$
 
 #### Bước 5: Trộn Thích ứng Học được (Learnable Mixing Layer)
 Nhánh Trend được dự báo riêng bằng lớp Linear siêu nhẹ:
+
 $$
 y_{\text{trend}} = \text{LinearProjection}(\text{AvgPool1d}(X_{\text{trend}})) \in \mathbb{R}^{B \times C \times H}
 $$
+
 Kết quả cuối cùng $y_{\text{forecast}}$ được trộn thích ứng theo từng kênh $c$ bằng trọng số $\alpha_c$ học được qua hàm Sigmoid:
+
 $$
 \alpha_{c} = \text{Sigmoid}(w_{c}) \quad (w_c \in \mathbb{R} \text{ là tham số học được})
 $$
+
 $$
 y_{\text{forecast}, c} = \alpha_{c} \cdot y_{\text{seasonal}, c} + (1 - \alpha_{c}) \cdot y_{\text{trend}, c}
 $$
@@ -168,6 +199,7 @@ $$
 
 #### Tính toán Anomaly Score
 Sai số dự báo (Residual MSE) đóng vai trò là điểm dị thường $A(t)$ tại thời điểm $t$:
+
 $$
 A(t) = \frac{1}{C \cdot H} \sum_{c=1}^C \sum_{h=1}^H (y_{\text{true}, c, h}(t) - y_{\text{forecast}, c, h}(t))^2
 $$
@@ -177,6 +209,7 @@ Dựa trên Thuyết Giá trị Cực trị (Extreme Value Theory - EVT), ta mô
 1. Xác định một ngưỡng cơ sở $u$ sao cho các phần vượt ngưỡng $A(t) - u$ tuân theo Phân phối Pareto Tổng quát (Generalized Pareto Distribution - GPD).
 2. Ước lượng tham số hình dáng $\xi$ và tỷ lệ $\sigma$ của GPD qua phương pháp MLE.
 3. Tính toán ngưỡng quyết định động $z_q$ cho xác suất vượt ngưỡng mục tiêu cực thấp $q = 10^{-3}$:
+
    $$
    z_q \approx u + \frac{\sigma}{\xi} \left( \left(\frac{N}{N_u} q\right)^{-\xi} - 1 \right)
    $$
