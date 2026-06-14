@@ -73,9 +73,9 @@ The anomaly detection performance was evaluated under localized **Peak Over Thre
 | Model | Batch Size | Val MSE | Val MAE | Test MSE | Test MAE | F1 (Robust) | FAR (Robust) | F1 (POT) | FAR (POT) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | LSTM | 64 | 0.7505 | 0.6439 | 4.4386 | 1.2215 | 0.8905 | **0.0112** | 0.6888 | **0.0011** |
-| Simple-Mamba | 64 | \underline{0.5243} | \underline{0.5194} | 4.6807 | 1.1521 | \textbf{0.9155} | 0.0129 | 0.6559 | **0.0011** |
-| PatchTST | 64 | **0.4993}** | **0.5058}** | \underline{4.2575} | **1.1282}** | \textbf{0.9156} | 0.0126 | **0.7649}** | **0.0011** |
-| **Mamba-Hybrid** | **1024** | 0.5778 | 0.5538 | **4.2488}** | \underline{1.1448} | 0.9048 | **0.0112** | \underline{0.7565} | **0.0011** |
+| Simple-Mamba | 64 | <u>0.5243</u> | <u>0.5194</u> | 4.6807 | 1.1521 | **0.9155** | 0.0129 | 0.6559 | **0.0011** |
+| PatchTST | 64 | **0.4993** | **0.5058** | <u>4.2575</u> | **1.1282** | **0.9156** | 0.0126 | **0.7649** | **0.0011** |
+| **Mamba-Hybrid** | **1024** | 0.5778 | 0.5538 | **4.2488** | <u>1.1448</u> | 0.9048 | **0.0112** | <u>0.7565</u> | **0.0011** |
 
 > [!NOTE]
 > Mamba-Hybrid (BS=1024) achieves the lowest forecasting test error (MSE = 4.2488) and the second-best F1-score (75.65%) under the leakage-free POT calibration, while keeping the false alarm rate (FAR) at a highly conservative 0.11%.
@@ -87,8 +87,8 @@ Resource usage and per-sample latency profiles were evaluated on an NVIDIA Tesla
 | :--- | :---: | :---: | :---: | :---: |
 | LSTM | 64 | **145.9** | 14.1804 | 14.1646 |
 | Simple-Mamba | 64 | 2023.3 | 5.6823 | 5.6641 |
-| PatchTST | 64 | 1335.4 | \underline{2.0576} | \underline{2.0382} |
-| **Mamba-Hybrid** | **64** | \underline{215.9} | 3.9426 | 3.9245 |
+| PatchTST | 64 | 1335.4 | <u>2.0576</u> | <u>2.0382</u> |
+| **Mamba-Hybrid** | **64** | <u>215.9</u> | 3.9426 | 3.9245 |
 | **Mamba-Hybrid** | **1024** | 3253.6 | **1.0086** | **0.9973** |
 
 *   **VRAM Efficiency**: At $BS=64$, Mamba-Hybrid requires only **215.9 MB** of VRAM, showing an **83.8%** and **89.3%** VRAM reduction compared to PatchTST (1335.4 MB) and Simple-Mamba (2023.3 MB), respectively.
@@ -105,8 +105,8 @@ We evaluated the contribution of each component under parameter budget parity (~
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
 | **Variant 1** | 0.3800 | 0.4226 | 3.2838 | 0.9201 | 0.9350 | 2859.10 | 573.94 | 189.74 | 1.0571 |
 | **Variant 2** | 0.3211 | 0.3871 | 3.2066 | 0.9039 | 0.9419 | 2859.27 | 575.51 | 217.12 | 1.0226 |
-| **Variant 3** | **0.2837** | **0.3623** | 3.2302 | \underline{0.8978} | **0.9445** | **394.83** | **95.81** | **43.41** | \underline{0.1832} |
-| **Variant 4** | \underline{0.3108} | \underline{0.3813} | **3.1454** | **0.8946** | \underline{0.9394} | \underline{403.85} | \underline{102.76} | \underline{47.27} | **0.1651** |
+| **Variant 3** | **0.2837** | **0.3623** | 3.2302 | <u>0.8978</u> | **0.9445** | **394.83** | **95.81** | **43.41** | <u>0.1832</u> |
+| **Variant 4** | <u>0.3108</u> | <u>0.3813</u> | **3.1454** | **0.8946** | <u>0.9394</u> | <u>403.85</u> | <u>102.76</u> | <u>47.27</u> | **0.1651** |
 
 > [!TIP]
 > *   Integrating **Series Decomposition** improves F1-Score from 93.50% to 94.19%.
