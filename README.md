@@ -124,6 +124,10 @@ To support online self-calibration, the Peak Over Threshold (POT) algorithm is h
 
 ## ⚡ Quick Start
 
+### 📋 System Requirements / Yêu cầu hệ thống
+*   **OS**: Linux or Windows with WSL2 (Mamba's native CUDA kernels require a Linux environment/WSL2 to compile and run).
+*   **GPU**: NVIDIA GPU with Compute Capability **sm_8.0 or higher** (e.g., RTX 3050, RTX 30/40 series, Ampere/Ada Lovelace architectures) supporting CUDA.
+
 ### 1. Setup Environment
 ```bash
 python -m venv venv
