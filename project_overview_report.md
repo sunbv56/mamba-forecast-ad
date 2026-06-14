@@ -66,10 +66,14 @@ Kiến trúc mô hình hoạt động thông qua một chuỗi các bước xử
 Khối này sử dụng cấu trúc trung bình trượt (Moving Average) trực tiếp trên tín hiệu đầu vào $x \in \mathbb{R}^{B \times C \times L}$ để chia tách thành hai phần riêng biệt:
 
 1. **Nhánh Xu hướng (Trend branch):** Trích xuất các biến biến đổi tần số thấp, đại diện cho tiến trình mài mòn từ từ dài hạn của kim loại.
-   $$x_{\text{trend}} = \text{AvgPool1d}(x, \text{kernel\_size}=25)$$
+   $$
+   x_{\text{trend}} = \text{AvgPool1d}(x, \text{kernel\_size}=25)
+   $$
    
 2. **Nhánh Dao động chu kỳ (Seasonal branch):** Chứa các rung động tần số cao, các xung va đập cơ học tuần hoàn và tiếng ồn vận hành.
-   $$x_{\text{seasonal}} = x - x_{\text{trend}}$$
+   $$
+   x_{\text{seasonal}} = x - x_{\text{trend}}
+   $$
 
 ---
 
@@ -77,10 +81,16 @@ Khối này sử dụng cấu trúc trung bình trượt (Moving Average) trực
 Đối với tín hiệu rung động tần số cao ở nhánh Seasonal, việc xử lý từng điểm đơn lẻ (point-wise) gây ra bùng nổ chiều dài chuỗi token và nhiễu cực lớn. Khối `SimplePatchEmbedding` nhóm các điểm rung động kề cận thành các mảnh cục bộ (patches) có kích thước cố định để lọc nhiễu đồng thời thu nhỏ độ dài cửa sổ ngữ cảnh đầu vào:
 
 * Tín hiệu Seasonal $x_{\text{seasonal}}$ có chiều dài $L$ được chia thành $N$ mảnh chồng lấp với kích thước mảnh $P$ (patch size) và bước nhảy $S$ (stride):
-  $$N = \left\lfloor \frac{L - P}{S} \right\rfloor + 1$$
+  $$
+  N = \left\lfloor \frac{L - P}{S} \right\rfloor + 1
+  $$
 * Lớp chiếu tuyến tính chiếu từng mảnh thành vector biểu diễn có kích thước ẩn $D$ (d_model):
-  $$s_p = \text{LinearProjection}(P \to D)$$
-  $$s \in \mathbb{R}^{B \times C \times N \times D}$$
+  $$
+  s_p = \text{LinearProjection}(P \to D)
+  $$
+  $$
+  s \in \mathbb{R}^{B \times C \times N \times D}
+  $$
 
 ---
 
@@ -89,13 +99,19 @@ Khối cốt lõi thực hiện mô hình hóa chuỗi thời gian tuần tự. 
 
 1. **CI Folding (Gộp chiều kênh cảm biến vào batch):** 
    Chiều kênh cảm biến $C$ (với dữ liệu rung động 2 trục gia tốc X và Y, $C=2$) được gộp trực tiếp vào chiều Batch:
-   $$s \in \mathbb{R}^{B \times C \times N \times D} \xrightarrow{\text{Reshape}} s_{\text{folded}} \in \mathbb{R}^{(B \cdot C) \times N \times D}$$
+   $$
+   s \in \mathbb{R}^{B \times C \times N \times D} \xrightarrow{\text{Reshape}} s_{\text{folded}} \in \mathbb{R}^{(B \cdot C) \times N \times D}
+   $$
    Việc gộp này giúp mô hình chia sẻ toàn bộ trọng số của backbone Mamba cho tất cả các kênh cảm biến, giảm dung lượng tham số và tăng tính tổng quát hóa.
 
 2. **Cơ chế Selective Scan thời gian thực của Mamba:**
    Mỗi chuỗi token $s_{\text{folded}}$ được đưa qua mạng Mamba Encoder gồm $N_{layer}$ khối. Mỗi khối giải quyết hệ phương trình trạng thái liên tục thông qua việc rời rạc hóa có chọn lọc phụ thuộc đầu vào:
-   $$h(t) = \mathbf{A}(t) h(t-1) + \mathbf{B}(t) s_{\text{folded}}(t)$$
-   $$\hat{s}(t) = \mathbf{C}(t) h(t) + \mathbf{D} s_{\text{folded}}(t)$$
+   $$
+   h(t) = \mathbf{A}(t) h(t-1) + \mathbf{B}(t) s_{\text{folded}}(t)
+   $$
+   $$
+   \hat{s}(t) = \mathbf{C}(t) h(t) + \mathbf{D} s_{\text{folded}}(t)
+   $$
    Sự phụ thuộc của các ma trận chuyển đổi tham số hóa $\mathbf{B}(t)$, $\mathbf{C}(t)$ và bước nhảy thời gian rời rạc hóa $\Delta(t)$ vào chính giá trị token đầu vào $s_{\text{folded}}(t)$ tạo nên cơ chế **Selective Scan** (quét chọn lọc). Cơ chế này giúp Mamba lọc bỏ các thông tin nhiễu tuần hoàn khỏe mạnh và tập trung cao độ ghi nhớ các xung va đập chớm hỏng chập chờn. Độ phức tạp tính toán đạt tuyến tính hoàn hảo $O(N)$.
 
 ---
@@ -107,21 +123,35 @@ Sau khi Mamba Encoder trích xuất vector đặc trưng biểu diễn ngữ c�
    $$stats = [\text{RMS}, \text{Kurtosis}, \text{Skewness}, \text{Peak-to-Peak}, \text{Crest Factor}, \text{Shape Factor}, \text{Peak}, \text{Mean}]$$
 2. **Cơ chế Hợp nhất (Fusion Head):**
    Đặc trưng vật lý được reshape theo dạng CI tương ứng $stats_{\text{folded}} \in \mathbb{R}^{(B \cdot C) \times 8}$. Vector ẩn từ Mamba được làm phẳng (flatten) và chiếu tuyến tính để kết hợp đồng thời với bộ chỉ số cơ học này:
-   $$s_{\text{flat}} = \text{Flatten}(s_{\text{hidden}}) \in \mathbb{R}^{(B \cdot C) \times (N \cdot D)}$$
-   $$s_{\text{fused}} = \text{Concat}(s_{\text{flat}}, \text{LinearProjection}(stats_{\text{folded}}))$$
-   $$y_{\text{seasonal\_folded}} = \text{LinearProjection}(s_{\text{fused}} \to H)$$
+   $$
+   s_{\text{flat}} = \text{Flatten}(s_{\text{hidden}}) \in \mathbb{R}^{(B \cdot C) \times (N \cdot D)}
+   $$
+   $$
+   s_{\text{fused}} = \text{Concat}(s_{\text{flat}}, \text{LinearProjection}(stats_{\text{folded}}))
+   $$
+   $$
+   y_{\text{seasonal\_folded}} = \text{LinearProjection}(s_{\text{fused}} \to H)
+   $$
 3. **CI Unfolding (Giải gộp kênh):**
-   $$y_{\text{seasonal\_folded}} \in \mathbb{R}^{(B \cdot C) \times H} \xrightarrow{\text{Reshape}} y_{\text{seasonal}} \in \mathbb{R}^{B \times C \times H}$$
+   $$
+   y_{\text{seasonal\_folded}} \in \mathbb{R}^{(B \cdot C) \times H} \xrightarrow{\text{Reshape}} y_{\text{seasonal}} \in \mathbb{R}^{B \times C \times H}
+   $$
 
 ---
 
 ### 4.5. Khối 5: Trộn thích ứng học được (Learnable Mixing Layer)
 Song song với Seasonal Branch, nhánh Trend được xử lý riêng biệt bằng một bộ downsampling kết hợp lớp chiếu tuyến tính siêu nhẹ:
-$$y_{\text{trend}} = \text{LinearProjection}(\text{AvgPool1d}(x_{\text{trend}})) \in \mathbb{R}^{B \times C \times H}$$
+$$
+y_{\text{trend}} = \text{LinearProjection}(\text{AvgPool1d}(x_{\text{trend}})) \in \mathbb{R}^{B \times C \times H}
+$$
 
 Kết quả đầu ra của hai nhánh được trộn thích nghi ở từng kênh cảm biến bằng một trọng số sigmoid học được:
-$$\alpha_{c} = \text{Sigmoid}(w_{c}) \in (0, 1) \quad (\text{với } w_{c} \in \mathbb{R}^{C} \text{ là tham số học được})$$
-$$y_{\text{forecast}, c} = \alpha_{c} \cdot y_{\text{seasonal}, c} + (1.0 - \alpha_{c}) \cdot y_{\text{trend}, c}$$
+$$
+\alpha_{c} = \text{Sigmoid}(w_{c}) \in (0, 1) \quad (\text{với } w_{c} \in \mathbb{R}^{C} \text{ là tham số học được})
+$$
+$$
+y_{\text{forecast}, c} = \alpha_{c} \cdot y_{\text{seasonal}, c} + (1.0 - \alpha_{c}) \cdot y_{\text{trend}, c}
+$$
 
 ---
 
@@ -129,11 +159,15 @@ $$y_{\text{forecast}, c} = \alpha_{c} \cdot y_{\text{seasonal}, c} + (1.0 - \alp
 Việc nhúng chỉ số cơ học vào đầu ra mang ý nghĩa khoa học sâu sắc, đặc biệt là **Độ nhọn Kurtosis (moment chuẩn hóa bậc 4)** và **Trị hiệu dụng RMS (Root Mean Square)**:
 
 * **Toán học của Kurtosis (Độ nhọn):**
-  $$\text{Kurtosis} = \frac{\frac{1}{N}\sum_{i=1}^N (x_i - \mu)^4}{\sigma^4}$$
+  $$
+  \text{Kurtosis} = \frac{\frac{1}{N}\sum_{i=1}^N (x_i - \mu)^4}{\sigma^4}
+  $$
   * *Ý nghĩa vật lý:* Khi vòng bi hoàn toàn khỏe mạnh, phân phối tín hiệu rung động tuân theo phân phối Gaussian chuẩn, giá trị Kurtosis luôn ổn định sát mốc **$\approx 3.0$**. Khi xuất hiện hư hỏng cục bộ chớm nở (nứt vi mô trên ca trong, ca ngoài hoặc con lăn), mỗi lần con lăn tiếp xúc vết nứt sẽ phát sinh một xung va đập biên độ cực lớn nhưng thời gian cực ngắn. Sự hiện diện của xung va đập làm phình to phần đuôi của phân phối xác suất, đẩy giá trị Kurtosis tăng đột biến lên mức **$5.0$ đến $50.0$**.
   * *Mối liên hệ nhân quả cơ học:* Việc nhúng Kurtosis giúp Anomaly Score của mô hình vọt lên cực nhanh ngay khi Kurtosis xuất hiện đột biến, tăng tối đa **Lead Time** (khoảng thời gian cảnh báo sớm trước khi máy hỏng hoàn toàn).
 * **Toán học của RMS (Trị hiệu dụng):**
-  $$\text{RMS} = \sqrt{\frac{1}{N}\sum_{i=1}^N x_i^2}$$
+  $$
+  \text{RMS} = \sqrt{\frac{1}{N}\sum_{i=1}^N x_i^2}
+  $$
   * *Ý nghĩa vật lý:* RMS phản ánh năng lượng tổng thể của dao động rung động. RMS là một chỉ báo muộn (lagging indicator) vì năng lượng tổng thể chỉ thực sự tăng mạnh khi mài mòn đã lan rộng nghiêm trọng làm rung lắc toàn bộ cấu trúc máy.
 
 ---
@@ -159,7 +193,9 @@ Quy trình phát hiện bất thường dựa trên nguyên lý **Sai số Dự 
 
 ### 5.1. Bước 1: Tính toán Điểm Dị thường (Anomaly Score)
 Sai số dự báo (Residuals) được tính toán bằng sai số bình phương trung bình (MSE) giữa tín hiệu tương lai thực tế $y_{true}$ và kết quả dự báo của mô hình $y_{pred}$:
-$$A(t) = \frac{1}{C \cdot H} \sum_{c=1}^C \sum_{h=1}^H (y_{true, c, h}(t) - y_{pred, c, h}(t))^2$$
+$$
+A(t) = \frac{1}{C \cdot H} \sum_{c=1}^C \sum_{h=1}^H (y_{true, c, h}(t) - y_{pred, c, h}(t))^2
+$$
 
 ### 5.2. Bước 2: Hiệu chuẩn Ngưỡng động Kháng rò rỉ (Leakage-Free Calibration)
 Để đảm bảo tính khoa học nghiêm ngặt, ngưỡng báo động lỗi không được tính toán trên toàn bộ chuỗi dữ liệu (để tránh rò rỉ thông tin hư hỏng vào ngưỡng).
@@ -168,9 +204,13 @@ $$A(t) = \frac{1}{C \cdot H} \sum_{c=1}^C \sum_{h=1}^H (y_{true, c, h}(t) - y_{p
   1. Chọn một ngưỡng cơ sở $u$ sao cho các phần vượt ngưỡng $x - u$ tuân theo Phân phối Pareto Tổng quát (Generalized Pareto Distribution - GPD).
   2. Khớp các tham số hình dáng $\xi$ và tỷ lệ $\sigma$ của GPD qua phương pháp tối đa hóa hợp lý (MLE).
   3. Xác định ngưỡng động nghiêm ngặt $z_p$ tương ứng với xác suất vi phạm cực kỳ thấp $q$ (ví dụ: $q = 10^{-3}$):
-     $$z_p \approx u + \frac{\sigma}{\xi} \left( \left(\frac{N}{N_u} q\right)^{-\xi} - 1 \right)$$
+     $$
+     z_p \approx u + \frac{\sigma}{\xi} \left( \left(\frac{N}{N_u} q\right)^{-\xi} - 1 \right)
+     $$
 * So sánh song song với ngưỡng tĩnh truyền thống **3-Sigma**:
-  $$\text{Thresh}_{\text{3-Sigma}} = \mu_{\text{healthy}} + 3 \cdot \sigma_{\text{healthy}}$$
+  $$
+  \text{Thresh}_{\text{3-Sigma}} = \mu_{\text{healthy}} + 3 \cdot \sigma_{\text{healthy}}
+  $$
 
 ### 5.3. Bước 3: Đưa ra quyết định thời gian thực
 Trạng thái bất thường được thiết lập tại thời điểm $t$ nếu $A(t) > \text{Threshold}$.
