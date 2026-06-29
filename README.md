@@ -1,10 +1,11 @@
-# Hybrid Mamba-CNN Architecture with Physics-Informed Stats Head for Leakage-Free Bearing Anomaly Detection
+# PhyDecoMamba: Physics-Aware Decomposed Mamba for EVT-Calibrated Bearing Detection
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C_style=flat&logo=pytorch&logoColor=white)](https://pytorch.org)
 [![Mamba](https://img.shields.io/badge/Mamba-State_Space_Model-black)](https://github.com/state-spaces/mamba)
 
-This repository contains the official implementation of the **Hybrid Mamba-CNN** architecture with a **Physics-Informed Statistical Head**, optimized for unsupervised, leakage-free bearing anomaly detection in run-to-failure lifecycles.
+This repository contains the official implementation of **PhyDecoMamba** (Physics-Aware Decomposed Mamba), a hybrid Mamba-CNN forecasting framework with a **Physics-Informed Statistical Head**, optimized for unsupervised, leakage-free bearing anomaly detection in run-to-failure lifecycles.
+
 
 ---
 
@@ -12,7 +13,7 @@ This repository contains the official implementation of the **Hybrid Mamba-CNN**
 
 In industrial diagnostics, traditional self-attention mechanisms introduce a quadratic computational bottleneck $\mathcal{O}(N^2)$ and are susceptible to noise dispersion under non-stationary vibration signals, often masking weak, chôm-lỗi fault signatures. Conversely, standard deep forecasting models suffer from data leakage during threshold calibration or lack mechanical interpretability. 
 
-To resolve these challenges, we propose a **Physics-Informed, Series-Decomposed Hybrid Mamba-CNN forecasting framework** for unsupervised and leakage-free bearing anomaly detection.
+To resolve these challenges, we propose **PhyDecoMamba** (Physics-Aware Decomposed Mamba), a series-decomposed hybrid Mamba-CNN forecasting framework for unsupervised and leakage-free bearing anomaly detection.
 
 ```mermaid
 graph TD
@@ -46,9 +47,10 @@ graph TD
 
 ### 🌟 Key Contributions:
 1. **Unsupervised Self-Supervised Forecasting**: Learns bearing degradation patterns without requiring explicit failure labels or manual degradation-stage segmentation.
-2. **Channel-Independent Hybrid Mamba-CNN**: Combines the local noise-suppression capabilities of 1D Convolutional layers with the linear-time complexity $\mathcal{O}(N)$ selective scan mechanism ($\text{S}6$) of Mamba for handling long lookback windows ($L_x = 4096$).
+2. **Channel-Independent Hybrid Mamba-CNN (PhyDecoMamba)**: Combines the local noise-suppression capabilities of 1D Convolutional layers with the linear-time complexity $\mathcal{O}(N)$ selective scan mechanism ($\text{S}6$) of Mamba for handling long lookback windows ($L_x = 4096$).
 3. **Physics-Informed Statistical Head**: Stabilizes latent representations and improves mechanical interpretability by fusing $8$ time-domain indicators (e.g., *Kurtosis* for transient micro-cracks and *RMS* for total wear energy) directly into the forecasting head.
 4. **Leakage-Free Validation Protocol**: Establishes dynamic decision thresholds using Peak Over Threshold (POT) calibration based on Extreme Value Theory, computed strictly from early-stage healthy operational segments to prevent information leakage.
+
 
 ---
 

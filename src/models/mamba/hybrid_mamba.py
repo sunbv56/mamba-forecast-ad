@@ -5,9 +5,10 @@ from .mamba_encoder import MambaEncoder
 from .fusion_head import FusionForecastHead
 
 
-class HybridMambaCNN(nn.Module):
+class PhyDecoMamba(nn.Module):
     """
-    CI-Mamba++ (Channel-Independent Mamba with Decomposition & RevIN).
+    PhyDecoMamba (Physics-Aware Decomposed Mamba for EVT-Calibrated Bearing Detection).
+    Formerly known as CI-Mamba++ or HybridMambaCNN.
 
     Kiến trúc:
         [Input] (B, C, L)
@@ -40,6 +41,7 @@ class HybridMambaCNN(nn.Module):
         super().__init__()
         model_cfg = config['model']
         data_cfg  = config.get('data', {})
+
 
         # --- Hyper-parameters ---
         in_channels  = model_cfg.get('in_channels',  data_cfg.get('input_dim', 1))
@@ -176,4 +178,7 @@ class HybridMambaCNN(nn.Module):
 
         return forecast
 
+
+# Alias for backward compatibility with older versions and notebooks
+HybridMambaCNN = PhyDecoMamba
 

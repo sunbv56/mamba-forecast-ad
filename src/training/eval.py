@@ -15,7 +15,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 from src.data import MultiBearingDataset
-from src.models.mamba import HybridMambaCNN, MambaTSOfficial, MambaTSConfig
+from src.models.mamba import PhyDecoMamba, HybridMambaCNN, MambaTSOfficial, MambaTSConfig
 from src.models.baselines.lstm import LSTMForecaster
 from src.models.baselines.modern_tcn import ModernTCNForecaster
 from src.models.baselines.patch_models import PatchTST, PatchLSTM

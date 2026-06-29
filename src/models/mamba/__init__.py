@@ -1,4 +1,4 @@
-from .hybrid_mamba import HybridMambaCNN
+from .hybrid_mamba import PhyDecoMamba, HybridMambaCNN
 from .mamba_encoder import MambaEncoder
 from .cnn_patching import CNNPatchEmbedding
 from .fusion_head import FusionForecastHead
@@ -7,6 +7,7 @@ from .mamba_ts_official import MambaTSOfficial, MambaTSConfig
 from .mamba_simple import SimpleMamba, SimpleMambaPatch
 
 __all__ = [
+    'PhyDecoMamba',
     'HybridMambaCNN', 
     'MambaEncoder', 
     'CNNPatchEmbedding', 
@@ -17,4 +18,5 @@ __all__ = [
     'SimpleMamba',
     'SimpleMambaPatch'
 ]
+
 

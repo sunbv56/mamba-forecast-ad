@@ -24,7 +24,7 @@ from src.models.baselines.tcn import TCNForecaster
 from src.models.baselines.modern_tcn import ModernTCNForecaster
 from src.models.baselines.transformer_small import PositionalEncoding
 from src.models.baselines.patch_models import PatchTST, PatchLSTM
-from src.models.mamba import HybridMambaCNN, MambaTS, MambaTSOfficial, MambaTSConfig, SimpleMamba, SimpleMambaPatch
+from src.models.mamba import PhyDecoMamba, HybridMambaCNN, MambaTS, MambaTSOfficial, MambaTSConfig, SimpleMamba, SimpleMambaPatch
 from src.evaluation.anomaly_scorer import calculate_anomaly_score
 
 def count_parameters(model):

@@ -10,7 +10,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 print("--- Đang khởi tạo các mô hình để kiểm tra tham số ---")
-from src.models.mamba import HybridMambaCNN, SimpleMamba, SimpleMambaPatch
+from src.models.mamba import PhyDecoMamba, HybridMambaCNN, SimpleMamba, SimpleMambaPatch
 from src.models.baselines.lstm import LSTMForecaster
 from src.models.baselines.modern_tcn import ModernTCNForecaster
 from src.models.baselines.patch_models import PatchTST, PatchLSTM
