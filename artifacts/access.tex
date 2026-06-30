@@ -18,6 +18,8 @@
 \setlength{\intextsep}{6pt plus 2pt minus 2pt}
 \setlength{\abovecaptionskip}{4pt plus 1pt minus 1pt}
 
+\newcommand{\corres}[1]{{\def\thefootnote{\fnsymbol{footnote}}\footnote{#1}}}
+
 \raggedbottom
 % Used for displaying a sample figure. If possible, figure files should
 % be included in EPS format.
@@ -35,7 +37,7 @@
 % If the paper title is too long for the running head, you can set
 % an abbreviated paper title here
 %
-\author{Long Truong\inst{1} \and Binh Thuan Truong\inst{2} \and Hung Lam Ly\inst{2}}
+\author{Long Truong\inst{1} \and Binh Thuan Truong\inst{2} \and Hung Lam Ly\inst{2} \and Phu Le Nguyen\inst{3}}
 \authorrunning{L. Truong et al.}
 % First names are abbreviated in the running head.
 % If there are more than two authors, 'et al.' is used.
@@ -47,9 +49,12 @@
 % ABC Institute, Rupert-Karls-University Heidelberg, Heidelberg, Germany\\
 % \email{\{abc,lncs\}@uni-heidelberg.de}}
 \institute{Faculty of Software Engineering, FPT University, Ho Chi Minh City, Vietnam \and
-Faculty of Information Technology, Ton Duc Thang University, Ho Chi Minh City, Vietnam}
+Faculty of Information Technology, Ton Duc Thang University, Ho Chi Minh City, Vietnam \and
+Faculty of Engineering and Technology, Nguyen Tat Thanh University, Ho Chi Minh City, Vietnam\\
+\email{pnguyen@ntt.edu.vn}}
 %
 \maketitle              % typeset the header of the contribution
+\corres{Corresponding Author: Phu Le Nguyen (Email: pnguyen@ntt.edu.vn)}
 %
 % \begin{abstract}
 % The abstract should briefly summarize the contents of the paper in
@@ -168,27 +173,8 @@ Decision threshold calibration is heavily relied upon by unsupervised anomaly de
 
 However, a fundamental structural mismatch exists when comparing forecasting layouts with prominent reconstruction baselines like OmniAnomaly~\cite{ref-18}, USAD~\cite{ref-19}, and TranAD~\cite{ref-20}, by which global reconstruction errors are minimized rather than sequential predictive paths. Beyond over-generalization risks, future data leakage is routinely induced across reconstruction networks by utilizing global validation distributions containing future anomalies to optimize threshold hyperparameters. To support online deployment readiness, threshold calibration within the proposed paradigm is derived strictly from localized, early-stage healthy data segments~\cite{ref-9}.
 
-\subsection{Literature Comparison Matrix} \label{sect:s2dot4}
-The structural advantages and operational properties of the proposed paradigm are contrasted with prominent baseline methods in Table~\ref{tabref:table-1}.
-
-\begin{table}[htbp]  
-\caption{Comprehensive Literature Matrix and Structural Comparison.}
-\label{tabref:table-1}
-\centering
-\scriptsize
-\setlength{\tabcolsep}{2.5pt}
-\renewcommand{\arraystretch}{0.95}
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{1.5cm}>{\raggedright\arraybackslash}p{1.6cm}>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}p{2.8cm}>{\raggedright\arraybackslash}p{2.8cm}@{}}
-\toprule
-\textbf{Study} & \textbf{Method Family} & \textbf{Key Strength} & \textbf{Key Limitation} & \textbf{Relation to this Work} \\ \midrule
-LSTM \cite{ref-1} & Sequential/ RNN & Simple sequence tracking & Limited long-range dependency modeling & Served as basic auto-scaled baselines \\
-PatchTST \cite{ref-4} & Transformer & Efficient temporal patching & Weak local inductive bias; omits channel correlation & Served as an advanced linear baseline \\
-Mamba \cite{ref-5} & Selective SSM & Linear long-sequence modeling ($\mathcal{O}(N)$) & Limited physical interpretability & Adopted as the core hidden sequence encoder \\
-FEMamba/ TFG-Mamba \cite{ref-6,ref-7} & Mamba-PHM & Deep degradation tracking & Predominantly dependent on supervised labels & Motivated the use of series decomposition \\
-OmniAnomaly/ USAD/ TranAD \cite{ref-18,ref-19,ref-20} & Reconstruction AD & Stable multi-sensor loops & Over-generalization; causes data leakage & Contrasted via sequence forecasting paradigm \\
-EVT/ POT \cite{ref-10} & Statistical Threshold & Precise tail modeling & Can leak if calibrated globally & Executed strictly within healthy intervals \\ \bottomrule
-\end{tabular}
-\end{table}
+\subsection{Positioning of the Proposed Work} \label{sect:s2dot4}
+Compared with recurrent baselines such as LSTM~\cite{ref-1}, transformer-based methods such as PatchTST~\cite{ref-4}, and reconstruction-based anomaly detection models such as OmniAnomaly~\cite{ref-18}, USAD~\cite{ref-19}, and TranAD~\cite{ref-20}, the proposed framework focuses on a lightweight forecasting-based anomaly detection paradigm. Unlike prior Mamba-based PHM models~\cite{ref-6,ref-7} that mainly target supervised fault classification or RUL prediction, PhyDecoMamba integrates series decomposition, physics-informed statistical descriptors, and leakage-free POT thresholding for unsupervised bearing anomaly detection. This positioning highlights the three primary differences of the proposed work: linear-time sequence modeling with $\mathcal{O}(N)$ complexity, explicit mechanical interpretability via a physics-informed statistical head, and online-ready threshold calibration strictly within healthy data intervals.
 
 \section{Methodology} \label{sect:s3}
 
@@ -366,7 +352,7 @@ where the threshold parameter $\delta$ is set to 1.0. As illustrated in Fig.~\re
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.8\textwidth]{loss_convergence.png}
+  \includegraphics[width=0.7\textwidth]{loss_convergence.png}
   \caption{Huber loss convergence curves under parameter budget parity. Both training and validation losses drop rapidly and stabilize after 6 epochs, showing smooth convergence.}
   \label{fig:loss_convergence}
 \end{figure}
@@ -384,8 +370,8 @@ For $\alpha=0.03$, a gradual increase in the raw RMS was observed across the bea
 
 \begin{figure}[htbp]
   \centering
-  \includegraphics[width=0.7\textwidth]{fig_waveform_decomposition.png}
-  \caption{Waveform decomposition results on bearing B02 across representative phases. Plots display raw, trend, and seasonal signals across healthy, mid-life, and fault stages, showing distinct degradation profiles.}
+  \includegraphics[width=0.45\textwidth]{fig_waveform_decomposition.png}
+  \caption{Waveform decomposition on bearing B02: raw, trend, and seasonal signals across healthy, mid-life, and fault-onset stages.}
   \label{fig:waveform_decomposition}
 \end{figure}
 
@@ -488,9 +474,7 @@ Only 23.51~ms is required by the POT algorithm to calibrate localized boundaries
 \end{figure}
 
 \subsection{Discussion on Mamba's Selective Scanning and Physical Interpretability} \label{sect:s5dot6}
-The competitive performance of the proposed PhyDecoMamba architecture is attributed to the integration of selective state space scanning with local convolutional filtering. Attention-based methods can be susceptible to noise dispersion, potentially masking weak fault signatures. In contrast, an input-dependent, time-varying filter is implemented by the selective scan mechanism ($\text{S}6$) of Mamba. Random noise is filtered out by $\text{S}6$ through the dynamic adjustment of state transition parameters based on input features, while linear-time complexity $\mathcal{O}(N)$ is maintained for long lookback windows ($L_x = 4096$).
-
-Furthermore, latent space optimization is stabilized by the 8-dimensional physics-informed statistical head. Forecasting trajectories are aligned with physical degradation dynamics by fusing domain-specific indicators (e.g., RMS for total wear energy, Kurtosis for transient micro-cracks) directly into the latent space, whereby the model is guided toward structurally meaningful wear patterns rather than high-frequency noise. It is indicated by an inference-time sensitivity analysis that the Shape Factor is critical under zero-out masking, by which a 5.32\% increase in forecasting MSE is caused. Moderate-to-high sensitivity (+1.49\%, +1.42\%, and +1.03\% MSE, respectively) is shown by vibration energy features (Standard Deviation, RMS, Peak-to-Peak), while Skewness is identified as redundant due to signal symmetry around zero.
+The effectiveness of PhyDecoMamba is attributed to the combination of selective state-space scanning, local convolutional filtering, and physics-informed descriptors. The selective scan captures long-range degradation dynamics with linear complexity $\mathcal{O}(N)$, while the convolutional branch suppresses short-term vibration noise. The statistical head further stabilizes the latent representation by injecting mechanical indicators such as RMS, kurtosis, peak-to-peak amplitude, and shape factor. An inference-time sensitivity analysis confirms that shape factor and energy-related features contribute most strongly to forecasting stability (up to $+5.32\%$ MSE under zero-out masking), supporting the physical relevance of the proposed fusion design.
 
 \subsection{Research Limitations} \label{sect:s5dot7}
 First, experimental validation is restricted to stationary operational velocities and constant load parameters within each simulation; robustness under transient profiles requires further verification. Second, channel independence is assumed by the model, meaning cross-channel spatial phase dependencies are not explicitly modeled. Third, while resource utilization was profiled under simulated constraints, the model was not evaluated on physical edge hardware (e.g., Raspberry Pi or Jetson boards); thus, physical deployment challenges remain to be verified. Finally, the signal-to-noise ratio of the predefined statistical parameters could be degraded by extreme broadband industrial background noise, by which diagnostic efficacy is potentially reduced compared to adaptive time-frequency filtering techniques.
