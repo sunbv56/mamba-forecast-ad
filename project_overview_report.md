@@ -1,380 +1,389 @@
-# NGHIÊN CỨU KIẾN TRÚC LAI MAMBA-CNN KẾT HỢP ĐẶC TRƯNG VẬT LÝ TRONG GIÁM SÁT TRẠNG THÁI VÀ CHẨN ĐOÁN HƯ HỎNG VÒNG BI
+# BÁO CÁO TỔNG QUAN DỰ ÁN: NGHIÊN CỨU KIẾN TRÚC PhyDecoMamba KẾT HỢP TRI THỨC VẬT LÝ VÀ HIỆU CHUẨN NGƯỠNG EVT/POT TRONG CHẨN ĐOÁN HƯ HỎNG VÒNG BI
 
 ---
 
-## 1. TÓM TẮT DỰ ÁN (ABSTRACT)
-Nghiên cứu này trình bày một giải pháp toàn diện cho bài toán dự báo chuỗi thời gian và chẩn đoán trạng thái sức khỏe vòng bi dựa trên sự kết hợp giữa mô hình học sâu thế hệ mới và tri thức vật lý chuyên ngành. Mô hình đề xuất, ký hiệu là **Mamba-Hybrid (CI-Mamba++ with Decomposition & Stats)**, là một kiến trúc lai ghép tối ưu nhằm giải quyết triệt để các hạn chế của mạng Transformer truyền thống (chi phí tính toán bậc hai $O(N^2)$) và mạng tích chập CNN (năng lực nắm bắt phụ thuộc dài hạn kém). Bằng việc tích hợp bộ lọc phân tách tín hiệu (Series Decomposition), phân mảnh đơn quy mô (Simple Patching) và hợp nhất đặc trưng cơ học vật lý (Physical Feature Fusion / Stats Head) qua đầu ra của mạng State Space Model (SSM) tuyến tính $O(N)$, mô hình đề xuất đạt được sự cân bằng vượt trội giữa độ chính xác chẩn đoán lỗi chớm nở và hiệu năng tính toán thời gian thực. *(Để tối ưu hóa sự tương tác trực tiếp của tín hiệu và tránh làm mờ các tần số rung động thô, khối chuẩn hóa RevIN và phân mảnh đa quy mô Multi-scale được tắt trong cấu hình thực nghiệm cuối cùng).* Hệ thống thực nghiệm trên tập dữ liệu vòng bi Paderborn (Paderborn Bearing Dataset - UPB) chứng minh mô hình đề xuất đạt chỉ số phát hiện dị thường cao nhất toàn hệ thống với tốc độ huấn luyện và suy luận tuyến tính vượt bậc khi mở rộng cửa sổ ngữ cảnh dài.
+> **Thông tin công trình khoa học (Cập nhật mới nhất theo bản thảo Springer / FISAT):**
+> * **Tên bài báo:** *PhyDecoMamba: Physics-Aware Decomposed Mamba for EVT-Calibrated Bearing Detection*
+> * **Tác giả:** Long Truong¹, Binh Thuan Truong², Hung Lam Ly², Phu Le Nguyen³*
+>   * ¹ Khoa Kỹ thuật Phần mềm, Trường Đại học FPT, TP. Hồ Chí Minh, Việt Nam
+>   * ² Khoa Công nghệ Thông tin, Trường Đại học Tôn Đức Thắng, TP. Hồ Chí Minh, Việt Nam
+>   * ³ Khoa Kỹ thuật và Công nghệ, Trường Đại học Nguyễn Tất Thành, TP. Hồ Chí Minh, Việt Nam (*Tác giả liên hệ: pnguyen@ntt.edu.vn*)
+> * **Mã nguồn dự án:** [https://github.com/sunbv56/mamba-forecast-ad](https://github.com/sunbv56/mamba-forecast-ad)
 
 ---
 
-## 2. CÂU HỎI NGHIÊN CỨU (RESEARCH QUESTIONS)
-Đề tài tập trung giải quyết năm câu hỏi phản biện khoa học cốt lõi sau, tích hợp các vấn đề mang tính thực tiễn cao từ các công trình chẩn đoán lỗi vòng bi tiên tiến (như nghiên cứu của *Long Truong & Phu Le Nguyen, 2024*):
+## 1. TÓM TẮT DỰ ÁN (ABSTRACT & KEYWORDS)
 
-1. **Câu hỏi 1 (Độ phức tạp chuỗi dài & Khả năng mở rộng phần cứng):** Làm thế nào để xây dựng một kiến trúc học sâu có độ phức tạp thời gian tuyến tính $O(N)$ nhằm xử lý các chuỗi tín hiệu rung động tần số cao cực dài, nhưng vẫn duy trì hoặc vượt trội hơn năng lực biểu diễn của các kiến trúc Transformer cồng kềnh có độ phức tạp $O(N^2)$?
-2. **Câu hỏi 2 (Kháng phi tĩnh & Phân tách giai đoạn thoái hóa chuyển tiếp):** Làm thế nào để giải quyết triệt để sự trôi phân phối tín hiệu (distribution shift) do quá trình thoái hóa hao mòn phi tĩnh gây ra? Đặc biệt là làm thế nào để mô hình nhận diện nhạy bén giai đoạn chuyển tiếp thoái hóa chớm nở (Degrading stage) - vốn rất mờ nhạt, phân bố chồng lấn và dễ bị nhầm lẫn giữa trạng thái khỏe mạnh (Healthy) và lỗi nặng (Fault)?
-3. **Câu hỏi 3 (Tích hợp tri thức cơ học & Khắc phục hạn chế của chỉ báo trễ):** Nghiên cứu đối chứng của *Long Truong & Phu Le Nguyen (2024)* đã chỉ ra rằng đặc trưng nhiệt độ (Temperature) là chỉ báo muộn (lagging indicator), chỉ thực sự rõ rệt ở pha cuối vòng đời do ma sát tích tụ dài hạn (90% - 100.1% TTF). Vì vậy, làm thế nào để tận dụng và nhúng trực tiếp các chỉ số cơ học nhạy xung tần số cao từ tín hiệu rung động (như moment chuẩn hóa bậc 4 Kurtosis, năng lực RMS) thông qua khối hợp nhất đặc trưng (Fusion Forecast Head) để dẫn đường vật lý cho mô hình học sâu, mang lại khoảng thời gian cảnh báo sớm (Lead Time) tối ưu vượt trội trước khi xảy ra hư hỏng catastrophic?
-4. **Câu hỏi 4 (Giao thức đánh giá kháng rò rỉ dữ liệu thời gian - Leakage-Free Protocol):** Trong chẩn đoán vòng bi, việc phân chia ngẫu nhiên ở mức cửa sổ (window-level random splits) sẽ gây rò rỉ dữ liệu thời gian nghiêm trọng (temporal leakage) do các cửa sổ trượt gối chồng lên nhau (overlapped windows), dẫn đến đánh giá hiệu năng quá lạc quan và sai lệch so với triển khai thực tế. Do đó, làm thế nào để thiết lập một quy trình hiệu chuẩn ngưỡng động (POT) hoàn toàn trên tập dữ liệu lành mạnh thực tế (leakage-free calibration) song hành với giao thức đánh giá dọc theo trục thời gian-đến-khi-hỏng (TTF-aligned temporal split: train-val-test phân rã liên tục) để phản ánh trung thực năng lực vận hành thực tế?
-5. **Câu hỏi 5 (Khả năng tổng quát hóa theo tiến trình thời gian - Temporal Generalization):** Làm thế nào để mô hình học sâu học được các biểu diễn đặc trưng bền vững từ giai đoạn vận hành sớm (earlier life) nhằm dự báo chính xác và tổng quát hóa tốt lên giai đoạn thoái hóa muộn (later life) khi đặc tính phi tĩnh thay đổi liên tục theo thời gian?
+### 1.1. Tóm tắt (Abstract)
+Giám sát trạng thái và phát hiện bất thường không giám sát trên vòng bi dựa trên tín hiệu gia tốc rung động đóng vai trò sống còn trong việc đảm bảo an toàn vận hành của hệ thống cơ điện tử công nghiệp. Tuy nhiên, các phương pháp tiếp cận truyền thống hiện nay đang đối mặt với ba nút thắt nghiêm trọng: 
+1. Tính chất phi tĩnh (non-stationary) và động học phi tuyến tính của tín hiệu rung động làm mờ nhạt các xung va đập hư hỏng ở giai đoạn chớm nở.
+2. Các mô hình học sâu chuỗi thời gian thuần túy hoạt động như các "hộp đen" thiếu tính giải thích cơ học vật lý rõ ràng.
+3. Việc lựa chọn ngưỡng bất thường bằng cách quét trên dữ liệu kiểm định toàn cục gây rò rỉ dữ liệu tương lai nghiêm trọng (data leakage), làm sai lệch đánh giá so với triển khai thực tế trực tuyến.
+
+Để giải quyết triệt để các hạn chế trên, nghiên cứu này đề xuất khung kiến trúc dự báo nhận thức vật lý **PhyDecoMamba** (*Physics-Aware Decomposed Mamba*). Khung kiến trúc phân rã chuỗi thời gian thô thành hai nhánh động học độc lập: thành phần xu hướng suy thoái dài hạn (Trend) và thành phần dao động xung cơ học tần số cao (Seasonal). Nhánh Seasonal được xử lý qua khối phân mảnh đơn quy mô (Simple Patching), tích chập 1D lọc nhiễu cục bộ và cơ chế quét chọn lọc (Selective Scan) thời gian tuyến tính $\mathcal{O}(N)$ của mô hình không gian trạng thái Mamba độc lập kênh (Channel-Independent). 
+
+Nhằm củng cố khả năng giải thích cơ học, không gian biểu diễn ẩn được nhúng trực tiếp với một đầu trích xuất đặc trưng thống kê vật lý 8 chiều (8D Physical-Statistical Head). Hệ thống tích hợp quy trình hiệu chuẩn ngưỡng động không rò rỉ dữ liệu dựa trên Thuyết Giá trị Cực trị (EVT) thông qua kỹ thuật Vượt Ngưỡng (Peak Over Threshold - POT) chỉ sử dụng các đoạn dữ liệu khỏe mạnh cục bộ ban đầu. Dưới quy chuẩn kiểm định nghiêm ngặt về sự tương đương ngân sách tham số (~338k tham số) trên bộ dữ liệu vòng bi Paderborn (UPB), **PhyDecoMamba** đạt chỉ số F1-Score **75.65%** dưới ngưỡng POT, Test MSE đạt mức thấp nhất toàn hệ thống (**4.2488**), chỉ tiêu tốn **215.9 MB** GPU VRAM ở Batch Size 64 và đạt độ trễ suy luận siêu thấp **1.01 ms/sample** ở cấu hình thông lượng cao (Batch Size 1024), mở ra khả năng triển khai xuất sắc trên các thiết bị giám sát nhúng tại biên.
+
+### 1.2. Từ khóa (Keywords)
+*Mô hình không gian trạng thái chọn lọc (Selective State Space Models)*, *PhyDecoMamba*, *Phân rã chuỗi thời gian (Series Decomposition)*, *Phát hiện bất thường vòng bi (Bearing Anomaly Detection)*, *Hiệu chuẩn không rò rỉ dữ liệu (Leakage-Free Calibration)*, *Kỹ thuật vượt ngưỡng (Peak Over Threshold - POT)*.
 
 ---
 
-## 3. Ý TƯỞNG NGHIÊN CỨU & ĐÓNG GÓP KHOA HỌC (CORE IDEAS & SCIENTIFIC CONTRIBUTIONS)
+## 2. ĐẶT VẤN ĐỀ & CÁC CÂU HỎI NGHIÊN CỨU CỐT LÕI
 
-### 3.1. Ý tưởng cốt lõi (CI-Mamba++)
-Ý tưởng trung tâm của đề tài là xây dựng cấu trúc lai ghép **CI-Mamba++** hoạt động theo luồng **Physics-informed Temporal Learning**:
-* **Phân tách tín hiệu (Series Decomposition):** Tách tín hiệu rung động thô trực tiếp thành hai nhánh độc lập là **Trend** (suy thoái dài hạn) và **Seasonal** (xung động lỗi nhanh). Mamba chỉ tập trung học các dao động phi tuyến phức tạp ở nhánh Seasonal, trong khi nhánh Trend được mô hình hóa bằng lớp Linear siêu nhẹ.
-* **Phân mảnh đơn quy mô (Simple Patching):** Cắt tín hiệu Seasonal thành các mảnh cục bộ thời gian có kích thước cố định nhằm thu nhỏ độ dài chuỗi token truyền vào mạng và lọc bớt tiếng ồn điểm đơn lẻ.
-* **Hợp nhất tri thức vật lý (Feature Fusion Head):** Kết hợp các vector trạng thái ẩn sâu sắc từ Mamba với 8 chỉ số thống kê chẩn đoán truyền thống (như Kurtosis, RMS,...) nhằm bổ sung tri thức vật lý cơ học máy, thay vì xem mô hình học sâu như một "hộp đen" thuần túy.
+### 2.1. Ba thách thức nghiên cứu cốt lõi
+1. **Thách thức 1 (Độ phức tạp chuỗi dài và Hạn chế tài nguyên phần cứng):** Các cơ chế tự chú ý (Self-Attention) trong mạng Transformer (như PatchTST, TimesNet) có độ phức tạp tính toán và bộ nhớ bậc hai $\mathcal{O}(N^2)$. Khi xử lý các chuỗi rung động tần số cao cực dài, Transformer nhanh chóng gây tràn bộ nhớ (Out-Of-Memory - OOM) trên phần cứng nhúng biên (Edge AI), cản trở việc giám sát đa kênh liên tục.
+2. **Thách thức 2 (Hộp đen thiếu giải thích cơ học & Phân tách suy thoái phi tĩnh):** Quá trình mài mòn cơ học khiến tín hiệu rung liên tục bị trôi phân phối. Các mô hình học sâu thuần túy thiếu sự ràng buộc với các định luật cơ học máy, dẫn đến biểu diễn không gian ẩn dễ bị đánh lừa bởi tiếng ồn băng rộng hoặc rung động nền của tải vận hành.
+3. **Thách thức 3 (Rò rỉ dữ liệu khi hiệu chuẩn ngưỡng phát hiện - Data Leakage):** Nhiều nghiên cứu hiện hành sử dụng ngưỡng tĩnh hoặc tối ưu ngưỡng toàn cục (Global Threshold Tuning) trên toàn bộ tập dữ liệu (vốn chứa sẵn các mẫu lỗi ở tương lai). Trong điều kiện triển khai trực tuyến thực tế (Online Continuous Monitoring), hệ thống chỉ có thể tiếp cận dữ liệu lịch sử ở trạng thái khỏe mạnh ban đầu.
 
-<div align="center">
-<div style="max-width: 350px;">
+### 2.2. Năm câu hỏi phản biện khoa học (Research Questions)
+* **RQ1:** Làm thế nào để xây dựng một kiến trúc học sâu có độ phức tạp thời gian tuyến tính $\mathcal{O}(N)$ nhằm xử lý chuỗi rung động ngữ cảnh dài nhưng vẫn duy trì độ chính xác nắm bắt tương quan dài hạn vượt trội?
+* **RQ2:** Làm thế nào để phân tách triệt để động học suy thoái tần số thấp (Trend) khỏi các xung va đập chu kỳ tần số cao (Seasonal) nhằm giảm thiểu hiện tượng trôi phân phối tín hiệu?
+* **RQ3:** Làm thế nào để kết hợp tri thức vật lý cơ học rõ ràng (độ nhọn Kurtosis, năng lượng RMS, hệ số dạng Shape Factor,...) vào không gian ẩn của mạng học sâu nhằm triệt tiêu báo động giả và phát hiện sớm hư hỏng chớm nở?
+* **RQ4:** Làm thế nào để thiết lập một quy trình xác định ngưỡng động tự động thích ứng dựa trên Thuyết Giá trị Cực trị (EVT/POT) hoàn toàn trên phân đoạn khỏe mạnh ban đầu, đảm bảo tính kháng rò rỉ dữ liệu tuyệt đối?
+* **RQ5:** Dưới quy chuẩn kiểm định công bằng về mặt ngân sách tham số phần cứng (Parameter Budget Parity), mô hình đề xuất thể hiện ưu thế như thế nào so với các baseline chuẩn mực (LSTM, Simple-Mamba, PatchTST) về độ chính xác, mức tiêu thụ VRAM và độ trễ suy luận?
+
+---
+
+## 3. Ý TƯỞNG CỐT LÕI & ĐÓNG GÓP KHOA HỌC
+
+### 3.1. Ý tưởng cấu trúc cốt lõi của PhyDecoMamba
+Ý tưởng trung tâm là thiết lập mô hình học sâu nhận thức vật lý kết hợp phân rã chuỗi thời gian (*Physics-Informed Series-Decomposed Mamba*):
+* **Phân rã chuỗi thích ứng (Adaptive Series Decomposition):** Tín hiệu thô được phân tách bằng bộ lọc trung bình trượt lũy thừa (EMA) có hệ số $\lambda$ tự học qua lan truyền ngược, tách biệt động học thành nhánh Trend mượt mà và nhánh Seasonal dao động nhanh.
+* **Xử lý nhánh Seasonal hiệu năng cao:** Phân mảnh tín hiệu (Patching) với kích thước $P=16$, bước nhảy $S=8$ giúp nén chuỗi token; kết hợp khối tích chập 1D CNN cục bộ nhằm triệt tiêu nhiễu nền tần số cao trước khi đưa vào backbone Mamba.
+* **Mamba SSM Backbone độc lập kênh (Channel-Independent):** Tận dụng cơ chế Selective Scan thời gian tuyến tính $\mathcal{O}(N)$, chia sẻ trọng số giữa các trục cảm biến gia tốc nhằm hạn chế sự lan truyền nhiễu liên kênh.
+* **Đầu trích xuất thống kê vật lý (8D Stats Head):** Nhúng trực tiếp 8 chỉ số cơ học thời gian được chuẩn hóa qua BatchNorm vào vector ngữ cảnh ẩn, tạo cầu nối toán học giữa biểu diễn sâu và các hiện tượng mài mòn kim loại.
+* **Trộn thích ứng học được (Learnable Mixing):** Kết hợp đầu ra dự báo của nhánh Trend (chiếu Linear nhẹ) và nhánh Seasonal thông qua trọng số Sigmoid học được độc lập cho từng kênh $\alpha_c = \sigma(w_c)$.
 
 ```mermaid
 graph TD
-    Input["Rung động thô<br>(B, C, L)"] --> Decomp["Series<br>Decomposition"]
+    Raw["Tín hiệu Rung động Thô X<br>(B, C, L)"] --> Decomp["Phân rã Chuỗi dựa trên EMA<br>(Learnable lambda)"]
     
-    Decomp -->|"Seasonal"| SimplePatch["Simple Patch<br>Embedding"]
-    Decomp -->|"Trend"| TrendHead["Linear<br>(Trend Branch)"]
+    Decomp -->|"Trend Stream (Tần số thấp)"| TrendLinear["Lớp chiếu Tuyến tính Trend<br>(Linear Projection)"]
+    Decomp -->|"Seasonal Stream (Tần số cao)"| Patch["Phân mảnh Patch Embedding<br>(P=16, S=8)"]
     
-    SimplePatch --> Mamba["CI Mamba<br>SSM Backbone"]
-    Mamba --> Fusion["Fusion Head<br>(Mamba + 8 Stats)"]
+    Patch --> Conv["Khối Tích chập 1D CNN<br>(Lọc nhiễu cục bộ)"]
+    Conv --> Mamba["Mamba Selective Scan SSM<br>(Channel-Independent, O(N))"]
     
-    TrendHead --> Mix["Learnable Mixing<br>(alpha)"]
-    Fusion --> Mix
+    Raw --> Stats["Trích xuất 8 Đặc trưng Vật lý<br>(Mean, RMS, Kurtosis, Crest,...)"]
+    Stats --> BN["Batch Normalization + Linear"]
     
-    Mix --> Output["Dự báo Tương lai<br>(B, C, H)"]
-
-    style Mamba fill:#f9f,stroke:#333,stroke-width:1px
-    style Fusion fill:#bbf,stroke:#333,stroke-width:1px
-    style Mix fill:#bfb,stroke:#333,stroke-width:1px
+    Mamba --> Fusion["Đầu Hợp nhất Vật lý (Fusion Head)<br>Concat(Mamba Latent, Stats)"]
+    BN --> Fusion
+    Fusion --> ForecastHead["Đầu Dự báo Seasonal Head"]
+    
+    TrendLinear --> Mix["Khối Trộn Thích ứng Học được<br>alpha * Y_trend + (1 - alpha) * Y_seasonal"]
+    ForecastHead --> Mix
+    
+    Mix --> Pred["Tín hiệu Dự báo Tương lai Y_hat<br>(B, C, H)"]
+    
+    style Raw fill:#e1f5fe,stroke:#0288d1,stroke-width:1px
+    style Mamba fill:#f3e5f5,stroke:#7b1fa2,stroke-width:1px
+    style Stats fill:#fff3e0,stroke:#e65100,stroke-width:1px
+    style Fusion fill:#ede7f6,stroke:#512da8,stroke-width:1px
+    style Mix fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px
+    style Pred fill:#e0f2f1,stroke:#00695c,stroke-width:1px
 ```
 
-</div>
-</div>
-
-### 3.2. Hai đóng góp khoa học lớn
-1. **Minh chứng thực nghiệm về sự cộng hưởng giữa Series Decomposition và các Đặc trưng Vật lý Thống kê (Statistical Features):** Mô hình đề xuất kết hợp đồng thời Series Decomposition (tách Trend và Seasonal) cùng các chỉ số vật lý thống kê (Kurtosis, RMS, v.v.). Kết quả phân tích bóc tách (Ablation Study) chứng minh sự cộng hưởng này giúp triệt tiêu hoàn toàn cảnh báo giả ở giai đoạn khỏe mạnh (nhờ Decomposition lọc nhiễu phẳng) và phản ứng nhạy bén, cảnh báo sớm trước **18% toàn bộ vòng đời** thiết bị (nhờ tính nhạy xung va đập chớm lỗi của Kurtosis).
-2. **Chứng minh thực nghiệm tính vượt trội toàn diện về hiệu năng phần cứng thực tế:** Mamba-Hybrid vượt trội hoàn toàn các baseline về mọi chỉ số hiệu năng vật lý trên GPU RTX 4070 Super: Tiết kiệm đến **85% VRAM huấn luyện** (chỉ `1086 MB` so với `7237 MB` của ModernTCN), tăng tốc độ huấn luyện lên **2.32 lần** (chỉ `2507.64 giây` so với `5827.00 giây` của ModernTCN) và giảm trễ suy luận thực tế xuống mức siêu thấp **0.0489 ms/sample** (nhanh gấp **11.2 lần** ModernTCN và **3.16 lần** PatchTST), mở ra cơ hội triển khai trên các thiết bị Edge thời gian thực.
+### 3.2. Ba đóng góp khoa học chính của công trình
+1. **Kiến trúc phân rã chuỗi kết hợp Selective State Space Model:** Đề xuất mô hình PhyDecoMamba kết hợp phân rã chuỗi thời gian, phân mảnh Patching và mạng Mamba chọn lọc, đạt độ phức tạp thời gian tuyến tính $\mathcal{O}(N)$ đồng thời ngăn chặn sự lan truyền nhiễu liên kênh nhờ cấu trúc Channel-Independent.
+2. **Khả năng giải thích cấu trúc nhận thức vật lý (Physics-Informed Structural Interpretability):** Tích hợp trực tiếp đầu thống kê vật lý 8 chiều vào không gian ẩn, tạo cầu nối chặt chẽ giữa các biểu diễn sâu trừu tượng với các mô tả cơ học máy tường minh mà không cần các công cụ giải thích bên ngoài (như SHAP hay LIME).
+3. **Quy trình hiệu chuẩn ngưỡng động không rò rỉ dữ liệu (Leakage-Free Validation Workflow):** Thiết lập quy trình xác định ngưỡng quyết định bất thường tự động dựa trên Thuyết Giá trị Cực trị (EVT) qua phương pháp Vượt Ngưỡng (POT), bảo đảm các ranh giới cảnh báo được tính toán thuần túy từ phân đoạn khỏe mạnh ban đầu, loại bỏ hoàn toàn hiện tượng rò rỉ dữ liệu thời gian.
 
 ---
 
-## 4. KIẾN TRÚC MÔ HÌNH ĐỀ XUẤT (PROPOSED MODEL ARCHITECTURE & DETAILED OPERATIONS)
+## 4. MA TRẬN ĐỐI CHIẾU TÀI LIỆU TOÀN DIỆN (LITERATURE COMPARISON)
 
-Kiến trúc mô hình hoạt động thông qua một chuỗi các bước xử lý toán học tuần tự, được tối ưu hóa sâu sắc ở từng module:
+Để làm rõ vị thế khoa học của PhyDecoMamba, Bảng 1 tóm tắt sự đối chiếu cấu trúc và đặc tính kỹ thuật giữa phương pháp đề xuất với các họ mô hình chẩn đoán đại diện trong tài liệu học thuật (tương ứng với Table 1 trong bài báo gốc):
 
-### 4.1. Khối 1: Phân tách chuỗi dựa trên EMA (EMA-based Series Decomposition)
-Khối này sử dụng phương pháp trung bình trượt lũy thừa (EMA) trực tiếp trên tín hiệu đầu vào $x \in \mathbb{R}^{B \times C \times L}$ để chia tách thành hai phần riêng biệt với tham số $\alpha$ tự học (learnable):
+**Bảng 1. Ma trận đối chiếu tài liệu và phân tích cấu trúc mô hình.**
 
-1. **Nhánh Xu hướng (Trend branch):** Trích xuất các biến biến đổi tần số thấp đại diện cho tiến trình mài mòn từ từ dài hạn của kim loại qua tích lũy EMA:
-
-   $$
-   x_{\text{trend}}[t] = \alpha \cdot x[t] + (1 - \alpha) \cdot x_{\text{trend}}[t-1]
-   $$
-   
-2. **Nhánh Dao động chu kỳ (Seasonal branch):** Chứa các rung động tần số cao, các xung va đập cơ học tuần hoàn và tiếng ồn vận hành:
-
-   $$
-   x_{\text{seasonal}} = x - x_{\text{trend}}
-   $$
+| Phương pháp / Nghiên cứu | Họ phương pháp | Điểm mạnh chính | Hạn chế cốt lõi | Mối liên hệ với PhyDecoMamba |
+| :--- | :--- | :--- | :--- | :--- |
+| **LSTM [1]** | Mạng tuần tự RNN | Theo dõi chuỗi thời gian đơn giản, dễ triển khai | Năng lực nắm bắt phụ thuộc dài hạn kém; độ trễ cập nhật trạng thái đệ quy lớn | Được chọn làm baseline tuần tự cổ điển có quy chuẩn tham số |
+| **PatchTST [4]** | Transformer | Phân mảnh thời gian hiệu quả; nắm bắt tương quan dài hạn tốt | Độ phức tạp bộ nhớ bậc hai $\mathcal{O}(N^2)$; định kiến quy nạp cục bộ yếu | Được chọn làm baseline Transformer tiên tiến nhất để so sánh |
+| **Mamba [5]** | Không gian trạng thái chọn lọc (SSM) | Mô hình hóa phụ thuộc chuỗi dài với độ phức tạp tuyến tính $\mathcal{O}(N)$ | Khả năng giải thích vật lý cơ học hạn chế nếu áp dụng thuần túy hộp đen | Được áp dụng làm khối mã hóa chuỗi thời gian cốt lõi |
+| **FEMamba / TFG-Mamba [6, 7]** | Mamba ứng dụng trong PHM | Nắm bắt tiến trình suy thoái sâu | Phụ thuộc nặng nề vào nhãn giám sát lỗi; thiếu phân tách chuỗi thích ứng | Tạo động lực cho việc ứng dụng phân rã chuỗi không giám sát |
+| **OmniAnomaly / USAD / TranAD [18–20]** | Phát hiện bất thường dựa trên Tái tạo (Reconstruction) | Ổn định trên dữ liệu đa cảm biến tĩnh | Dễ khái quát hóa quá mức (tái tạo cả xung lỗi sớm); rò rỉ dữ liệu khi chọn ngưỡng | Đối chiếu thông qua mô hình dự báo tương lai (Forecasting-based) |
+| **EVT / POT [10]** | Ngưỡng thống kê cực trị | Mô hình hóa chính xác phần đuôi phân phối lỗi hiếm gặp | Dễ gây rò rỉ dữ liệu nghiêm trọng nếu hiệu chuẩn trên tập kiểm định toàn cục | Được tích hợp và giới hạn nghiêm ngặt trong phân đoạn khỏe mạnh ban đầu |
 
 ---
 
-### 4.2. Khối 2: Phân mảnh đơn quy mô (Simple Patch Embedding)
-Đối với tín hiệu rung động tần số cao ở nhánh Seasonal, việc xử lý từng điểm đơn lẻ (point-wise) gây ra bùng nổ chiều dài chuỗi token và nhiễu cực lớn. Khối `SimplePatchEmbedding` nhóm các điểm rung động kề cận thành các mảnh cục bộ (patches) có kích thước cố định để lọc nhiễu đồng thời thu nhỏ độ dài cửa sổ ngữ cảnh đầu vào:
+## 5. KIẾN TRÚC CHI TIẾT MÔ HÌNH PhyDecoMamba
 
-* Tín hiệu Seasonal $x_{\text{seasonal}}$ có chiều dài $L$ được chia thành $N$ mảnh chồng lấp với kích thước mảnh $P$ (patch size) và bước nhảy $S$ (stride):
+### 5.1. Phát biểu bài toán (Problem Formulation)
+Gọi chuỗi rung động gia tốc đa biến thu thập trong cửa sổ lịch sử nhìn lại (lookback window) độ dài $L$ trên $C$ kênh cảm biến là $X \in \mathbb{R}^{L \times C}$. Mục tiêu là huấn luyện mô hình dự báo chuỗi vận hành tương lai trong khoảng chân trời $H$, ký hiệu là $\widehat{Y} \in \mathbb{R}^{H \times C}$, sao cho sát nhất với chuỗi thực tế tương lai $Y \in \mathbb{R}^{H \times C}$. Mạng chỉ được tối ưu hóa duy nhất trên phân phối dữ liệu thuộc giai đoạn khỏe mạnh ban đầu (`healthy_labels == 0`).
 
-  $$
-  N = \left\lfloor \frac{L - P}{S} \right\rfloor + 1
-  $$
-
-* Lớp chiếu tuyến tính chiếu từng mảnh thành vector biểu diễn có kích thước ẩn $D$ (d_model):
-
-  $$
-  s_p = \text{LinearProjection}(P \to D)
-  $$
-
-  $$
-  s \in \mathbb{R}^{B \times C \times N \times D}
-  $$
-
----
-
-### 4.3. Khối 3: Mamba State Space Model (SSM) Backbone
-Khối cốt lõi thực hiện mô hình hóa chuỗi thời gian tuần tự. Nhằm tối ưu hóa tài nguyên phần cứng, mô hình triển khai theo cơ chế **Channel-Independent (CI)**:
-
-1. **CI Folding (Gộp chiều kênh cảm biến vào batch):** 
-   Chiều kênh cảm biến $C$ (với dữ liệu rung động 2 trục gia tốc X và Y, $C=2$) được gộp trực tiếp vào chiều Batch:
-
-   $$
-   s \in \mathbb{R}^{B \times C \times N \times D} \xrightarrow{\text{Reshape}} s_{\text{folded}} \in \mathbb{R}^{(B \cdot C) \times N \times D}
-   $$
-
-   Việc gộp này giúp mô hình chia sẻ toàn bộ trọng số của backbone Mamba cho tất cả các kênh cảm biến, giảm dung lượng tham số và tăng tính tổng quát hóa.
-
-2. **Cơ chế Selective Scan thời gian thực của Mamba:**
-   Mỗi chuỗi token $s_{\text{folded}}$ được đưa qua mạng Mamba Encoder gồm $N_{layer}$ khối. Mỗi khối giải quyết hệ phương trình trạng thái liên tục thông qua việc rời rạc hóa có chọn lọc phụ thuộc đầu vào:
-
-   $$
-   h(t) = \mathbf{A}(t) h(t-1) + \mathbf{B}(t) s_{\text{folded}}(t)
-   $$
-
-   $$
-   \hat{s}(t) = \mathbf{C}(t) h(t) + \mathbf{D} s_{\text{folded}}(t)
-   $$
-   Sự phụ thuộc của các ma trận chuyển đổi tham số hóa $\mathbf{B}(t)$, $\mathbf{C}(t)$ và bước nhảy thời gian rời rạc hóa $\Delta(t)$ vào chính giá trị token đầu vào $s_{\text{folded}}(t)$ tạo nên cơ chế **Selective Scan** (quét chọn lọc). Cơ chế này giúp Mamba lọc bỏ các thông tin nhiễu tuần hoàn khỏe mạnh và tập trung cao độ ghi nhớ các xung va đập chớm hỏng chập chờn. Độ phức tạp tính toán đạt tuyến tính hoàn hảo $O(N)$.
-
----
-
-### 4.4. Khối 4: Hợp nhất Đặc trưng Vật lý (Physics-Informed Fusion Forecast Head)
-Sau khi Mamba Encoder trích xuất vector đặc trưng biểu diễn ngữ cảnh chuỗi ẩn $s_{\text{hidden}} \in \mathbb{R}^{(B \cdot C) \times N \times D}$, mô hình tích hợp trực tiếp bộ đặc trưng chẩn đoán vật lý truyền thống truyền dẫn từ đầu vào nhằm cung cấp tri thức cơ học vận hành:
-
-1. **Bộ 8 đặc trưng vật lý được tính toán từ tín hiệu thô:**
-
-   $$
-   stats = [\text{RMS}, \text{Kurtosis}, \text{Skewness}, \text{Peak-to-Peak}, \text{Crest Factor}, \text{Shape Factor}, \text{Peak}, \text{Mean}]
-   $$
-
-2. **Cơ chế Hợp nhất (Fusion Head):**
-   Đặc trưng vật lý được reshape theo dạng CI tương ứng $stats_{\text{folded}} \in \mathbb{R}^{(B \cdot C) \times 8}$. Vector ẩn từ Mamba được làm phẳng (flatten) và chiếu tuyến tính để kết hợp đồng thời với bộ chỉ số cơ học này:
-
-   $$
-   s_{\text{flat}} = \text{Flatten}(s_{\text{hidden}}) \in \mathbb{R}^{(B \cdot C) \times (N \cdot D)}
-   $$
-
-   $$
-   s_{\text{fused}} = \text{Concat}(s_{\text{flat}}, \text{LinearProjection}(stats_{\text{folded}}))
-   $$
-
-   $$
-   y_{\text{seasonal-folded}} = \text{LinearProjection}(s_{\text{fused}} \to H)
-   $$
-
-3. **CI Unfolding (Giải gộp kênh):**
-
-   $$
-   y_{\text{seasonal-folded}} \in \mathbb{R}^{(B \cdot C) \times H} \xrightarrow{\text{Reshape}} y_{\text{seasonal}} \in \mathbb{R}^{B \times C \times H}
-   $$
-
----
-
-### 4.5. Khối 5: Trộn thích ứng học được (Learnable Mixing Layer)
-Song song với Seasonal Branch, nhánh Trend được xử lý riêng biệt bằng một bộ downsampling kết hợp lớp chiếu tuyến tính siêu nhẹ (sử dụng Pooling trung bình với tham số `trend_downsample` từ cấu hình):
+### 5.2. Khối 1: Phân tách chuỗi dựa trên EMA thích ứng (Adaptive Series Decomposition)
+Phân tách trực tiếp tín hiệu đầu vào $X \in \mathbb{R}^{L \times C}$ thành hai thành phần thông qua bộ lọc trung bình trượt lũy thừa (EMA) với hệ số làm mịn $\lambda \in (0, 1)$ được tối ưu hóa tự động qua hàm mất mát:
 
 $$
-y_{\text{trend}} = \text{LinearProjection}(\text{AvgPool1d}(x_{\text{trend}}, \text{kernel-size}=\text{downsample})) \in \mathbb{R}^{B \times C \times H}
-$$
-
-Kết quả đầu ra của hai nhánh được trộn thích nghi ở từng kênh cảm biến bằng một trọng số sigmoid học được:
-
-$$
-\alpha_{c} = \text{Sigmoid}(w_{c}) \in (0, 1) \quad (\text{với } w_{c} \in \mathbb{R}^{C} \text{ là tham số học được})
+X_{\text{trend}}[t] = \lambda X[t] + (1 - \lambda) X_{\text{trend}}[t-1]
 $$
 
 $$
-y_{\text{forecast}, c} = \alpha_{c} \cdot y_{\text{seasonal}, c} + (1.0 - \alpha_{c}) \cdot y_{\text{trend}, c}
+X_{\text{seasonal}} = X - X_{\text{trend}}
+$$
+
+*Ý nghĩa vật lý:*
+* $X_{\text{trend}}$: Đại diện cho sự tích tụ mài mòn kim loại từ từ và sự thay đổi tải vận hành dài hạn (tần số thấp). Nhánh này được dự báo bằng một lớp chiếu tuyến tính siêu nhẹ:
+
+  $$
+  \widehat{Y}_{t} = W_{t} X_{\text{trend}} + b_{t}
+  $$
+
+* $X_{\text{seasonal}}$: Chứa các dao động cơ học tần số cao, tiếng ồn vận hành và các xung va đập vi mô khi con lăn đi qua vết nứt bề mặt.
+
+### 5.3. Khối 2: Phân mảnh Patch Embedding và Khối 1D Convolution
+Để xử lý tín hiệu tần số cao ở nhánh Seasonal mà không làm bùng nổ độ dài chuỗi token:
+1. **Phân mảnh (Simple Patch Embedding):** Tín hiệu $X_{\text{seasonal}}$ độ dài $L$ được chia thành $N$ mảnh chồng lấp với kích thước mảnh $P = 16$ và bước nhảy $S = 8$:
+
+   $$
+   N = \left\lfloor \frac{L - P}{S} \right\rfloor + 1
+   $$
+
+   Mỗi mảnh được ánh xạ thành vector ẩn kích thước $D$ qua một lớp Linear Projection: $S_p \in \mathbb{R}^{B \times C \times N \times D}$.
+2. **Khối Tích chập 1D CNN cục bộ:** Áp dụng lớp tích chập 1D dọc theo trục thời gian cục bộ để triệt tiêu nhiễu đo lường băng rộng của thiết bị đo trước khi đưa vào không gian trạng thái.
+
+### 5.4. Khối 3: Mamba Selective State Space Backbone độc lập kênh (CI)
+Mô hình triển khai theo cơ chế **Channel-Independent (CI)**: gộp kênh cảm biến $C$ vào chiều Batch $S_{\text{folded}} \in \mathbb{R}^{(B \cdot C) \times N \times D}$. Điều này giúp mô hình chia sẻ toàn bộ trọng số của backbone Mamba cho mọi cảm biến, giảm dung lượng tham số và tăng tính tổng quát hóa.
+
+Mỗi khối Mamba giải quyết hệ phương trình trạng thái liên tục thông qua việc rời rạc hóa có chọn lọc phụ thuộc trực tiếp vào dữ liệu đầu vào:
+
+$$
+h(t) = \mathbf{A}(t) h(t-1) + \mathbf{B}(t) s(t)
+$$
+
+$$
+\hat{s}(t) = \mathbf{C}(t) h(t) + \mathbf{D} s(t)
+$$
+
+Các ma trận $\mathbf{B}(t)$, $\mathbf{C}(t)$ và bước nhảy thời gian $\Delta(t)$ được tham số hóa từ chính token đầu vào, cho phép mô hình nhớ các xung va đập hư hỏng đột ngột và loại bỏ các dao động tuần hoàn bình thường. Toàn bộ cơ chế đạt độ phức tạp tính toán tuyến tính $\mathcal{O}(N)$. Đầu ra của Mamba stream được tổng hợp thành vector ngữ cảnh toàn cục $y_m$.
+
+### 5.5. Khối 4: Đầu trích xuất Thống kê Vật lý 8 chiều (Physics-Informed Statistical Head)
+Để ràng buộc không gian ẩn với các hiện tượng suy thoái cơ học thực tế, một vector thống kê thời gian 8 chiều $V_{\text{stats}} \in \mathbb{R}^8$ được trích xuất trực tiếp từ cửa sổ nhìn lại thô $X$ (tương ứng với Table 2 trong bài báo):
+
+**Bảng 2. Bảng ánh xạ các đặc trưng thống kê - vật lý trong PhyDecoMamba.**
+
+| STT | Đặc trưng thống kê | Công thức toán học | Ý nghĩa vật lý cơ học |
+| :---: | :--- | :--- | :--- |
+| **1** | **Mean (Giá trị trung bình)** | $\mu = \frac{1}{L} \sum_{t=1}^L x_t$ | Biểu thị độ lệch tâm cấu trúc và các thành phần dịch chuyển DC |
+| **2** | **Standard Deviation (Độ lệch chuẩn)** | $\sigma = \sqrt{\frac{1}{L} \sum_{t=1}^L (x_t - \mu)^2}$ | Đo lường độ biến thiên năng lượng xung quanh đường xu hướng trung bình |
+| **3** | **Root Mean Square (RMS)** | $x_{\text{rms}} = \sqrt{\frac{1}{L} \sum_{t=1}^L x_t^2}$ | Theo dõi tổng năng lượng phá hủy cấu trúc do mài mòn cơ học tích tụ |
+| **4** | **Peak-to-Peak** | $x_{\text{p-p}} = \max(x) - \min(x)$ | Đo biên độ chênh lệch xung va đập cực đại trong cửa sổ quan sát |
+| **5** | **Skewness (Hệ số bất đối xứng)** | $S_k = \frac{1}{L \cdot \sigma^3} \sum_{t=1}^L (x_t - \mu)^3$ | Đo tính bất đối xứng của phân phối do vết tróc rỗ bề mặt cục bộ gây ra |
+| **6** | **Kurtosis (Độ nhọn - Moment bậc 4)** | $K_u = \frac{1}{L \cdot \sigma^4} \sum_{t=1}^L (x_t - \mu)^4$ | Cực kỳ nhạy bén với các xung va đập vi mô khi xuất hiện vết nứt chớm nở |
+| **7** | **Crest Factor (Hệ số đỉnh)** | $CF = \frac{\max(\|x\|)}{x_{\text{rms}}}$ | Đánh giá độ sắc nhọn của đỉnh sóng nhằm phân biệt xung nứt với nhiễu nền |
+| **8** | **Shape Factor (Hệ số dạng)** | $SF = \frac{x_{\text{rms}}}{\frac{1}{L} \sum_{t=1}^L \|x_t\|}$ | Phản ánh sự biến dạng biên dạng sóng tổng thể khi hình thái mài mòn thay đổi |
+
+Vector đặc trưng $V_{\text{stats}}$ được chuẩn hóa qua một lớp BatchNorm và chiếu tuyến tính trước khi ghép nối trực tiếp (concatenation) với vector ngữ cảnh của Mamba $y_m$:
+
+$$
+Z_{\text{fused}} = \left[ y_m \parallel \text{Linear}(\text{BatchNorm}(V_{\text{stats}})) \right]
+$$
+
+$$
+\widehat{Y}_s = W_s Z_{\text{fused}} + b_s
+$$
+
+### 5.6. Khối 5: Trộn thích ứng 2 nhánh học được (Learnable Dual-Stream Mixing)
+Dự báo tương lai cuối cùng $\widehat{Y}$ được kết hợp động giữa nhánh Trend ($\widehat{Y}_t$) và nhánh Seasonal ($\widehat{Y}_s$) bằng trọng số Sigmoid học được độc lập cho từng kênh cảm biến $c$:
+
+$$
+\alpha_c = \sigma(w_c)
+$$
+
+$$
+\widehat{Y}_{c} = \alpha_c \widehat{Y}_{t, c} + (1 - \alpha_c) \widehat{Y}_{s, c}
 $$
 
 ---
 
-### 4.6. Bản chất Toán học Vật lý của các Chỉ số Nhúng
-Việc nhúng chỉ số cơ học vào đầu ra mang ý nghĩa khoa học sâu sắc, đặc biệt là **Độ nhọn Kurtosis (moment chuẩn hóa bậc 4)** và **Trị hiệu dụng RMS (Root Mean Square)**:
+## 6. QUY TRÌNH PHÁT HIỆN BẤT THƯỜNG KHÁNG RÒ RỈ DỮ LIỆU (LEAKAGE-FREE POT PIPELINE)
 
-* **Toán học của Kurtosis (Độ nhọn):**
+### 6.1. Điểm dị thường dựa trên Sai số Dự báo (Forecasting Residual MSE)
+Tại mỗi cửa sổ thời gian kiểm tra $t$, Điểm Dị thường (Anomaly Score) $S_t$ được tính bằng sai số bình phương trung bình trên toàn bộ các kênh cảm biến $C$ và các bước trong khoảng dự báo $H$:
 
-  $$
-  \text{Kurtosis} = \frac{\frac{1}{N}\sum_{i=1}^N (x_i - \mu)^4}{\sigma^4}
-  $$
+$$
+S_t = \frac{1}{H \cdot C} \sum_{h=1}^H \sum_{c=1}^C \left(Y_{h, c} - \widehat{Y}_{h, c}\right)^2
+$$
 
-  * *Ý nghĩa vật lý:* Khi vòng bi hoàn toàn khỏe mạnh, phân phối tín hiệu rung động tuân theo phân phối Gaussian chuẩn, giá trị Kurtosis luôn ổn định sát mốc **$\approx 3.0$**. Khi xuất hiện hư hỏng cục bộ chớm nở (nứt vi mô trên ca trong, ca ngoài hoặc con lăn), mỗi lần con lăn tiếp xúc vết nứt sẽ phát sinh một xung va đập biên độ cực lớn nhưng thời gian cực ngắn. Sự hiện diện của xung va đập làm phình to phần đuôi của phân phối xác suất, đẩy giá trị Kurtosis tăng đột biến lên mức **$5.0$ đến $50.0$**.
-  * *Mối liên hệ nhân quả cơ học:* Việc nhúng Kurtosis giúp Anomaly Score của mô hình vọt lên cực nhanh ngay khi Kurtosis xuất hiện đột biến, tăng tối đa **Lead Time** (khoảng thời gian cảnh báo sớm trước khi máy hỏng hoàn toàn).
+### 6.2. Hiệu chuẩn ngưỡng động bằng Thuyết Giá trị Cực trị (EVT/POT)
+Để đảm bảo quy trình không rò rỉ dữ liệu (leakage-free), việc tính toán ngưỡng được thực hiện **độc quyền** trên phân đoạn dữ liệu khỏe mạnh ban đầu (`healthy_labels == 0`):
+1. **Ngưỡng mốc cơ sở ($t_0$):** Xác định giá trị phân vị cao (ví dụ: phân vị thứ 98%) trên chuỗi điểm dị thường của dữ liệu khỏe mạnh: $t_0 = \text{Percentile}(S_{\text{healthy}}, 98\%)$.
+2. **Lọc tập vượt ngưỡng (Extreme Excesses):** Thu thập các giá trị vượt ngưỡng cơ sở:
 
-* **Toán học của RMS (Trị hiệu dụng):**
+   $$
+   A_e = \{ S_t - t_0 \mid S_t > t_0 \}
+   $$
 
-  $$
-  \text{RMS} = \sqrt{\frac{1}{N}\sum_{i=1}^N x_i^2}
-  $$
-  * *Ý nghĩa vật lý:* RMS phản ánh năng lượng tổng thể của dao động rung động. RMS là một chỉ báo muộn (lagging indicator) vì năng lượng tổng thể chỉ thực sự tăng mạnh khi mài mòn đã lan rộng nghiêm trọng làm rung lắc toàn bộ cấu trúc máy.
+3. **Khớp hàm Phân phối Pareto Tổng quát (GPD):** Theo định lý Pickands-Balkema-de Haan, tập vượt ngưỡng $A_e$ tuân theo phân phối GPD:
+
+   $$
+   G_{\xi, \beta}(x) = 1 - \left(1 + \frac{\xi x}{\beta}\right)^{-1/\xi}
+   $$
+
+   Trong đó, tham số hình dáng $\xi$ và tham số tỷ lệ $\beta$ được ước lượng bằng phương pháp Ước lượng Hợp lý Cực đại (MLE).
+4. **Xác định Ngưỡng động Cuối cùng ($T_{\text{dny}}$):** Tương ứng với xác suất cảnh báo mục tiêu $q$ (được cấu hình $q = 10^{-3}$):
+
+   $$
+   T_{\text{dny}} = t_0 + \frac{\beta}{\xi} \left( \left( \frac{N \cdot q}{N_t} \right)^{-\xi} - 1 \right)
+   $$
+
+   Trong đó $N$ là tổng số mẫu kiểm tra khỏe mạnh cơ sở và $N_t$ là số lượng mẫu vi phạm mốc $t_0$.
+
+Trong giai đoạn giám sát thời gian thực, nếu $S_t > T_{\text{dny}}$, hệ thống sẽ lập tức kích hoạt cờ cảnh báo bất thường cơ học.
 
 ---
 
-## 5. QUY TRÌNH PIPELINE PHÁT HIỆN BẤT THƯỜNG (ANOMALY DETECTION PIPELINE)
+## 7. THIẾT KẾ THỰC NGHIỆM & QUY CHUẨN ĐỒNG BỘ THAM SỐ (EXPERIMENTAL DESIGN)
 
-Quy trình phát hiện bất thường dựa trên nguyên lý **Sai số Dự báo (Forecasting-based Anomaly Detection)** chạy theo luồng khép kín không rò rỉ dữ liệu (leakage-free):
+### 7.1. Tập dữ liệu Paderborn (UPB) và Tiền xử lý Tín hiệu
+Nghiên cứu sử dụng tập dữ liệu kiểm thử vòng bi tăng tốc đến khi hỏng (run-to-failure) của Đại học Paderborn (UPB) trên vòng bi cầu đỡ chặn 61806-2RS. Tín hiệu rung động được thu thập đồng bộ từ 2 cảm biến gia tốc với tần số lấy mẫu ban đầu 64 kHz hoặc 128 kHz. Để chuẩn hóa độ phân giải thời gian và tối ưu hóa chi phí phần cứng, toàn bộ tín hiệu được giảm tần số lấy mẫu (decimation) về tần số chuẩn thống nhất **$f_s = 12.8\text{ kHz}$**.
 
-```
-[Input Window] ──> [Proposed Model (Mamba-Hybrid)] ──> [Predicted Future Signal]
-       │                                                      │
-       └──────────────────> [Calculate Residual MSE] <────────┘
-                                      │
-                                      ▼
-                             [Anomaly Score Flow]
-                                      │
-                        [POT Threshold Adaptive Calibration]
-                         (Calculated on 20% healthy data)
-                                      │
-                                      ▼
-                        [Real-time Early Warning Alarm]
-```
+### 7.2. Quy trình phân vùng thời gian không rò rỉ dữ liệu (Temporal Partitioning Workflow)
+Nghiên cứu đánh giá khả năng giám sát trực tuyến theo tiến trình thời gian vòng đời, sử dụng 7 vòng bi kiểm thử (**B01, B03, B04, B08, B10, B12, B17**) và tập huấn luyện (**B02, B05, B08, B10, B11, B17**):
+* **Bỏ qua giai đoạn khởi động:** Bỏ qua 5% dữ liệu đầu tiên của vòng đời (`skip_ratio = 0.05`) để loại bỏ nhiễu ban đầu do thiết lập chạy rà máy.
+* **Tập Huấn luyện & Kiểm định Khỏe mạnh (5% – 45% vòng đời):** Phân đoạn này hoàn toàn khỏe mạnh, được trích xuất bằng kỹ thuật lấy mẫu cách quãng:
+  * Tập Train: Lấy mẫu bước nhảy 2 (`stride = 2`, cắt lát `[0::2]`).
+  * Tập Validation: Lấy mẫu bước nhảy 4 bắt đầu từ 1 (`stride = 4`, cắt lát `[1::4]`). Ngưỡng POT được hiệu chuẩn duy nhất trên tập này.
+* **Tập Kiểm thử (45% vòng đời – Khi hỏng hoàn toàn):** Dành riêng để đánh giá hiệu năng phát hiện lỗi và tính toán lead time.
+* **Cấu hình Cửa sổ trượt:** Chiều dài nhìn lại $L_x = 4096$ mẫu (~0.32 giây rung động), chân trời dự báo $L_y = 512$ mẫu (~0.04 giây) và bước trượt stride = 1024 mẫu.
 
-### 5.1. Bước 1: Tính toán Điểm Dị thường (Anomaly Score)
-Sai số dự báo (Residuals) được tính toán bằng sai số bình phương trung bình (MSE) giữa tín hiệu tương lai thực tế $y_{true}$ và kết quả dự báo của mô hình $y_{pred}$:
+**Bảng 3. Bảng cấu hình thực nghiệm và thiết lập quy chuẩn mô hình.**
 
-$$
-A(t) = \frac{1}{C \cdot H} \sum_{c=1}^C \sum_{h=1}^H (y_{true, c, h}(t) - y_{pred, c, h}(t))^2
-$$
-
-### 5.2. Bước 2: Hiệu chuẩn Ngưỡng động Kháng rò rỉ (Leakage-Free Calibration)
-Để đảm bảo tính khoa học nghiêm ngặt, ngưỡng báo động lỗi không được tính toán trên toàn bộ chuỗi dữ liệu (để tránh rò rỉ thông tin hư hỏng vào ngưỡng).
-* Ngưỡng được tự động xác định hoàn toàn trên **khoảng thời gian khỏe mạnh đã biết trước** (20% dữ liệu healthy đầu tiên của toàn bộ vòng đời thiết bị).
-* Áp dụng thuật toán **Peak-Over-Threshold (POT)** dựa trên Thuyết Giá trị Cực trị (Extreme Value Theory - EVT):
-  1. Chọn một ngưỡng cơ sở $u$ sao cho các phần vượt ngưỡng $x - u$ tuân theo Phân phối Pareto Tổng quát (Generalized Pareto Distribution - GPD).
-  2. Khớp các tham số hình dáng $\xi$ và tỷ lệ $\sigma$ của GPD qua phương pháp tối đa hóa hợp lý (MLE).
-  3. Xác định ngưỡng động nghiêm ngặt $z_p$ tương ứng với xác suất vi phạm cực kỳ thấp $q$ (ví dụ: $q = 10^{-3}$):
-
-     $$
-     z_p \approx u + \frac{\sigma}{\xi} \left( \left(\frac{N}{N_u} q\right)^{-\xi} - 1 \right)
-     $$
-
-* So sánh song song với ngưỡng tĩnh truyền thống **3-Sigma**:
-
-  $$
-  \text{Thresh}_{\text{3-Sigma}} = \mu_{\text{healthy}} + 3 \cdot \sigma_{\text{healthy}}
-  $$
-
-### 5.3. Bước 3: Đưa ra quyết định thời gian thực
-Trạng thái bất thường được thiết lập tại thời điểm $t$ nếu $A(t) > \text{Threshold}$.
+| Tham số / Hạng mục | Giá trị cấu hình |
+| :--- | :--- |
+| **Bộ dữ liệu (Dataset)** | Paderborn Bearing Dataset (UPB, loại vòng bi 61806-2RS) |
+| **Tần số lấy mẫu (Sampling Rate)** | Hạ mẫu chuẩn hóa về $f_s = 12.8\text{ kHz}$ |
+| **Kích thước cửa sổ trượt** | Lookback ($L_x$) = 4096, Horizon ($L_y$) = 512, Stride = 1024 |
+| **Phân chia dữ liệu (Data Split)** | Train Khỏe mạnh: 5%–45% vòng đời; Test: 45%–hỏng hoàn toàn |
+| **Lấy mẫu phụ (Sub-sampling)** | Train: stride 2 (`[0::2]`); Val: stride 4 (`[1::4]`) |
+| **Các mô hình đối chứng (Baselines)** | LSTM, Simple-Mamba, PatchTST |
+| **Ngân sách tham số đồng bộ** | Kích hoạt `autoscale_baselines: true` (~338k tham số) |
+| **Hàm mất mát (Loss Function)** | Huber Loss ($\delta = 1.0$) |
+| **Thuật toán tối ưu hóa** | Adam (Learning rate $5 \times 10^{-4}$, 10 epochs, batch size 128) |
+| **Nền tảng phần cứng** | GPU NVIDIA CUDA (RTX 4070 Super và Tesla T4) |
 
 ---
 
-## 6. KẾT QUẢ THỰC NGHIỆM & SO SÁNH BASELINE (EMPIRICAL RESULTS & DEEP-DIVE ANALYSIS)
+## 8. KẾT QUẢ THỰC NGHIỆM & PHÂN TÍCH PHẢN BIỆN CHUYÊN SÂU
 
-### 6.1. Bảng so sánh Hiệu năng vĩ mô (Macro-Average Performance)
-Các chỉ số dưới đây là giá trị trung bình vĩ mô (Macro-Average) thu được khi đánh giá trên 7 vòng bi thực nghiệm (**B01, B03, B04, B08, B10, B12, B17**) đối với cấu hình **Nano (Kích thước ngữ cảnh: $L = 4096, H = 1024$)**:
+### 8.1. Kiểm chứng Động học của Khối Phân tách Chuỗi (Series Decomposition Dynamics)
+Phân tích thực nghiệm trên vòng bi B02 qua các giai đoạn khỏe mạnh, trung niên và chớm hỏng:
+* Giá trị $\lambda$ tối ưu học được qua mạng hội tụ tại $\lambda \approx 0.03$ (tương đương cửa sổ trung bình trượt hiệu dụng $N_{\text{eq}} \approx 66$). Phân tích tương quan Pearson chứng minh $\lambda = 0.03$ tối đa hóa hệ số tương quan giữa RMS thành phần Trend với chỉ số tiến trình vòng đời ($r = 0.6191$).
+* Phân tích thành phần chính (PCA) cho thấy: Để giải thích 90% phương sai tích lũy, nhánh Trend chỉ cần **11 thành phần chính (PCs)**, trong khi nhánh Seasonal cần tới **31 PCs** (không gian biểu diễn rộng gấp **2.8 lần**). Điều này chứng minh tính đúng đắn của việc tách biệt cấu trúc 2 nhánh: nhánh Trend được mô hình hóa bằng lớp Linear siêu nhẹ, giải phóng toàn bộ năng lực của khối Mamba tập trung vào nhánh Seasonal phức tạp.
+* Phân tích phổ FFT trên thành phần Seasonal tại thời điểm khởi phát lỗi làm nổi bật rõ rệt đỉnh tần số trùng khớp với tần số lỗi vòng trong lý thuyết (BPFI - Ball Pass Frequency Inner), khẳng định tính toàn vẹn vật lý của tín hiệu sau phân rã.
 
-**Thiết lập môi trường phần cứng thực nghiệm:** Toàn bộ quá trình huấn luyện và đánh giá hiệu năng của tất cả các mô hình được thực hiện đồng nhất trên hệ thống trang bị GPU **NVIDIA GeForce RTX 4070 Super (12 GB VRAM)**. Tổng thời gian huấn luyện thực tế cho toàn bộ chuỗi mô hình đối chứng và mô hình đề xuất kéo dài liên tục trong khoảng **8 giờ**, đảm bảo tính nhất quán và tính toàn vẹn của quá trình so sánh phần cứng.
+### 8.2. So sánh Hiệu năng Phát hiện Bất thường Trung bình Vĩ mô (Macro-Average Performance)
+Bảng 4 tổng hợp kết quả trung bình vĩ mô (Macro-Average) thu được trên 7 vòng bi kiểm thử dưới quy chuẩn tương đương ngân sách tham số (~338k tham số):
 
-*(Lưu ý: Để đảm bảo tính chính xác và trung thực khoa học tuyệt đối dựa trên thực nghiệm thực tế tại `eval-mamba-forecast-ad.ipynb`, cấu hình ngắn S-Nano không được sử dụng trong đánh giá cuối cùng và do đó các số liệu tập trung hoàn toàn vào cấu hình Nano).*
+**Bảng 4. Hiệu năng phát hiện bất thường và cấu hình hiệu chuẩn đa ngưỡng (Table 4 trong bài báo gốc).**
 
-| Mô hình (Model) | F1 (POT) | MSE | Thời gian Huấn luyện (10 epochs) | Peak GPU VRAM (Huấn luyện) | Peak GPU VRAM (Đánh giá) | TOTAL REAL LATENCY (Trễ Suy luận) |
+| Mô hình (Model) | Batch Size (BS) | Val MSE | Test MSE | F1-Score (Robust) | F1-Score (POT) | FAR (POT) |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Simple-Mamba** | 0.7537 | 2.807236 | 2709.11 giây | 1246 MB | 145.7 MB | 0.0632 ms/sample |
-| **Mamba-Hybrid** | **0.7570** | 2.834928 | **2507.64 giây** | **1086 MB** | **138.9 MB** | **0.0489 ms/sample** |
-| **PatchTST** | 0.7544 | 2.827766 | 4117.71 giây | 4201 MB | 321.5 MB | 0.1545 ms/sample |
-| **ModernTCN** | 0.7526 | 2.830994 | 5827.00 giây | 7237 MB | 847.7 MB | 0.5474 ms/sample |
+| **LSTM** | 64 | $0.7505 \pm 0.0125$ | $4.4386 \pm 0.1235$ | $0.8905 \pm 0.0115$ | $0.6888 \pm 0.0152$ | $0.0011 \pm 0.0001$ |
+| **Simple-Mamba** | 64 | $\underline{0.5243} \pm 0.0084$ | $4.6807 \pm 0.1584$ | $\underline{0.9155} \pm 0.0125$ | $0.6559 \pm 0.0184$ | $0.0011 \pm 0.0001$ |
+| **PatchTST** | 64 | $\mathbf{0.4993} \pm 0.0062$ | $\underline{4.2575} \pm 0.0982$ | $\mathbf{0.9156} \pm 0.0102$ | $\mathbf{0.7649} \pm 0.0118$ | $0.0011 \pm 0.0001$ |
+| **PhyDecoMamba** | **1024** | $0.5778 \pm 0.0078$ | $\mathbf{4.2488} \pm 0.0894$ | $0.9048 \pm 0.0122$ | $\underline{0.7565} \pm 0.0135$ | $0.0011 \pm 0.0001$ |
 
-#### Chi tiết Phân rã Độ trễ Đánh giá Thời gian thực (Real-time Latency Breakdown per sample):
-Để làm rõ nguồn gốc của trễ suy luận thực tế (Inference Latency), thời gian xử lý được bóc tách chi tiết thành 4 thành phần cấu thành (đơn vị: mili-giây):
+*(Ghi chú: Giá trị tốt nhất được in đậm, giá trị tốt thứ nhì được gạch chân. Rob: Ngưỡng Robust MAD; POT: Ngưỡng Peak Over Threshold).*
 
-* **Mô hình Mamba-Hybrid (Đề xuất):**
-  * *Truyền dữ liệu (CPU -> GPU):* 0.0053 ms
-  * *Mô hình Dự báo (Forward Pass):* 0.0425 ms
-  * *Tính điểm Dị thường (Anomaly Score):* 0.0009 ms
-  * *So sánh Ngưỡng (Threshold Decision):* 0.0002 ms
-  * *👉 **Tổng cộng (TOTAL REAL LATENCY):** **0.0489 ms/sample***
+**Phân tích chuyên sâu từ Bảng 4:**
+1. **Sai số dự báo Test MSE thấp nhất:** PhyDecoMamba đạt sai số dự báo kiểm thử thấp nhất toàn bộ (**4.2488**), vượt trội hơn cả PatchTST (4.2575), LSTM (4.4386) và Simple-Mamba (4.6807).
+2. **Khả năng phát hiện lỗi tin cậy:** Dưới ngưỡng POT kháng rò rỉ, PhyDecoMamba đạt F1-Score **75.65%**, vượt xa LSTM (68.88%) và Simple-Mamba (65.59%). Mặc dù PatchTST đạt F1 cao hơn 0.84% (76.49%) nhờ cơ chế tự chú ý toàn cục, PatchTST bị tắc nghẽn bộ nhớ nghiêm trọng và không thể mở rộng quy mô lô dữ liệu.
+3. **Kiểm soát báo động giả cực tốt:** Dưới hiệu chuẩn POT, tất cả các mô hình đều duy trì tỷ lệ báo động giả cực thấp **FAR = 0.11% (0.0011)**, thấp hơn gần 10 lần so với ngưỡng Robust (1.12% - 1.29%).
 
-* **Mô hình Simple-Mamba:**
-  * *Truyền dữ liệu (CPU -> GPU):* 0.0053 ms
-  * *Mô hình Dự báo (Forward Pass):* 0.0567 ms
-  * *Tính điểm Dị thường (Anomaly Score):* 0.0009 ms
-  * *So sánh Ngưỡng (Threshold Decision):* 0.0002 ms
-  * *👉 **Tổng cộng (TOTAL REAL LATENCY):** **0.0632 ms/sample***
+### 8.3. Nghiên cứu Bóc tách Định lượng 4 Biến thể Kiến trúc (Quantitative Ablation Study)
+Để chứng minh khoa học vai trò đóng góp của từng khối chức năng, thực nghiệm bóc tách được tiến hành trên 5 vòng bi (B01–B05) với cùng một ngân sách tham số ~200k tham số (Bảng 5):
+* **Variant 1 (SimpleMamba):** Mamba chọn lọc cơ bản chạy trực tiếp trên tín hiệu thô (không Decomposition, không Patching, không CNN).
+* **Variant 2 (MambaDecomp):** Tích hợp khối phân rã chuỗi thời gian EMA để tách riêng nhánh Trend và Seasonal.
+* **Variant 3 (MambaDecomp_P16_S8):** Tích hợp thêm lớp phân mảnh Patch Embedding ($P=16, S=8$).
+* **Variant 4 (Mamba_CNN_Patching - Kiến trúc PhyDecoMamba đề xuất):** Bổ sung khối 1D CNN cục bộ trước Mamba Selective Scan.
 
-* **Mô hình PatchTST:**
-  * *Truyền dữ liệu (CPU -> GPU):* 0.0053 ms
-  * *Mô hình Dự báo (Forward Pass):* 0.1480 ms
-  * *Tính điểm Dị thường (Anomaly Score):* 0.0010 ms
-  * *So sánh Ngưỡng (Threshold Decision):* 0.0002 ms
-  * *👉 **Tổng cộng (TOTAL REAL LATENCY):** **0.1545 ms/sample***
+**Bảng 5. Tiêu thụ tài nguyên và hồ sơ độ trễ của các biến thể bóc tách (Table 5 trong bài báo gốc).**
 
-* **Mô hình ModernTCN:**
-  * *Truyền dữ liệu (CPU -> GPU):* 0.0053 ms
-  * *Mô hình Dự báo (Forward Pass):* 0.5407 ms
-  * *Tính điểm Dị thường (Anomaly Score):* 0.0012 ms
-  * *So sánh Ngưỡng (Threshold Decision):* 0.0003 ms
-  * *👉 **Tổng cộng (TOTAL REAL LATENCY):** **0.5474 ms/sample***
+| Chỉ số thực nghiệm | Variant 1 (SimpleMamba) | Variant 2 (MambaDecomp) | Variant 3 (+ Patching) | Variant 4 (PhyDecoMamba đầy đủ) |
+| :--- | :---: | :---: | :---: | :---: |
+| **Val MSE** | 0.3800 | 0.3211 | **0.2837** | 0.3108 |
+| **Val MAE** | 0.4226 | 0.3871 | **0.3623** | 0.3813 |
+| **Test MSE** | 3.2838 | 3.2066 | 3.2302 | **3.1454** |
+| **Test MAE** | 0.9201 | 0.9039 | 0.8978 | **0.8946** |
+| **F1-Score (POT)** | 0.9350 | 0.9419 | **0.9445** | 0.9394 |
+| **FAR (POT)** | **0.0013** | **0.0013** | 0.0014 | **0.0013** |
+| **VRAM Huấn luyện (MB)** | 2859.10 MB | 2859.27 MB | **394.83 MB** | 403.85 MB |
+| **VRAM Suy luận (MB)** | 573.94 MB | 575.51 MB | **95.81 MB** | 102.76 MB |
+| **Thời gian Train / Epoch** | 189.74 s | 217.12 s | **43.41 s** | 47.27 s |
+| **Độ trễ Suy luận (ms/mẫu)** | 1.0571 ms | 1.0226 ms | 0.1832 ms | **0.1651 ms** |
 
----
-
-### 6.2. Phân tích Phản biện Chuyên sâu về hiệu năng Baseline
-
-#### 1. Ưu thế vượt trội của Mamba-Hybrid so với Simple-Mamba:
-Mô hình đề xuất Mamba-Hybrid đạt chỉ số phát hiện bất thường F1 cao nhất toàn hệ thống (`0.7570`), vượt qua Simple-Mamba (`0.7537`). Đáng chú ý, Mamba-Hybrid tiêu thụ ít VRAM hơn (`138.9 MB` so với `145.7 MB`) và đạt độ trễ suy luận thấp hơn (`0.0489 ms` so với `0.0632 ms/sample`). Kết quả này chứng minh hiệu quả thực tế của khối phân tách chuỗi thích ứng (Series Decomposition). Bằng việc chuyển giao thành phần xu hướng tần số thấp (Trend) sang một lớp Linear siêu nhẹ độc lập, mô hình đã giảm bớt đáng kể gánh nặng tính toán phi tuyến cho khối Mamba SSM trên nhánh Seasonal, giúp backbone Mamba tập trung toàn bộ năng lực mô hình hóa các xung động bất thường chập chờn một cách hiệu quả và tiết kiệm tài nguyên hơn.
-
-#### 2. Giới hạn độ phức tạp bộ nhớ bậc hai của PatchTST:
-Mặc dù PatchTST đạt F1-Score khá tốt (`0.7544`) và sai số dự báo MSE thấp (`2.827766`), mô hình này bị giới hạn lớn về mặt phần cứng khi triển khai thời gian thực. Do cơ chế tự chú ý (Self-Attention) truyền thống tính toán tương quan toàn cục dọc theo trục thời gian có độ phức tạp bộ nhớ và tính toán bậc hai $O(N^2)$, PatchTST tiêu thụ tới `321.5 MB` GPU VRAM (gấp **2.3 lần** Mamba-Hybrid) và có độ trễ suy luận thực tế `0.1545 ms/sample` (chậm gấp **3.1 lần** Mamba-Hybrid). Điều này làm giảm đáng kể khả năng ứng dụng thực tế của PatchTST trên các thiết bị giám sát nhúng (Edge devices) có cấu hình phần cứng hạn chế.
-
-#### 3. Cổ chai phần cứng nghiêm trọng của ModernTCN:
-Trong thực nghiệm thực tế, ModernTCN bộc lộ điểm yếu chí mạng về hiệu năng phần cứng khi tiêu thụ lượng VRAM khổng lồ (`847.7 MB`, gấp **6.1 lần** Mamba-Hybrid) và có độ trễ suy luận vọt lên mức `0.5474 ms/sample` (chậm gấp **11.2 lần** Mamba-Hybrid). Sự suy giảm hiệu năng nghiêm trọng này bắt nguồn từ các đặc tính vật lý của GPU:
-* *Arithmetic Intensity (Cường độ tính toán) thấp:* Tích chập tách kênh (Depthwise Separable Convolution - DW-Conv) tuy giảm số lượng tham số lý thuyết nhưng có tỉ lệ tính toán trên bộ nhớ cực kỳ thấp. GPU liên tục rơi vào trạng thái nghẽn băng thông nạp dữ liệu (Memory-bound) thay vì tận dụng song song hóa tính toán.
-* *GPU Kernel Launch Overhead:* Việc phân mảnh tích chập dọc theo các kênh cảm biến độc lập kích hoạt hàng ngàn GPU Kernel chạy liên tục và tuần tự, tích lũy chi phí điều phối luồng (overhead) cực kỳ lớn.
-* *Không liên tục trong bộ nhớ:* Sử dụng các nhân chập rất lớn (Large Kernel) với lớp chập giãn (Dilated Convolution) làm mất đi tính liên tục của dữ liệu trong bộ nhớ (Non-coalesced memory access), làm vô hiệu hóa khả năng đọc gộp dữ liệu từ bộ nhớ toàn cục (Global Memory) của GPU Tensor Cores.
-
----
-
-### 6.3. Chi phí hiệu chuẩn các Ngưỡng động (Calibration Overhead)
-Đo lường thời gian xử lý thực tế (trung bình ms/bearing) để thiết lập ngưỡng báo động dị thường trên tập dữ liệu healthy 20% đầu tiên:
-
-| Thuật toán chọn ngưỡng | Simple-Mamba | Mamba-Hybrid | PatchTST | ModernTCN | Tính khả thi trong Giám sát Edge / Online |
-| :--- | :---: | :---: | :---: | :---: | :--- |
-| **3-Sigma** | **0.1976 ms** | **0.2269 ms** | **0.2151 ms** | **0.2515 ms** | **Cực kỳ khả thi** (Chỉ tính Mean & Std đơn giản) |
-| **Percentile** | 0.9169 ms | 0.9557 ms | 0.8787 ms | 0.9080 ms | **Cực kỳ khả thi** (Sắp xếp phân vị đơn giản) |
-| **Robust (MAD)** | 2.8238 ms | 2.8125 ms | 2.7709 ms | 2.7913 ms | **Cực kỳ khả thi** (Tính Median Absolute Deviation) |
-| **POT (Peak-Over-Threshold)** | **18.7061 ms** | **18.4176 ms** | **18.7598 ms** | **20.0305 ms** | **Rất khả thi** (Khớp hàm phân phối cực trị GPD tối đa) |
-| **Self-Learn (GMM)** | 846.3323 ms | 799.2035 ms | 1013.2760 ms | 841.0221 ms | **Kém khả thi** (Yêu cầu vòng lặp EM hội tụ phức tạp) |
-| **Optimal (Tối ưu toàn cục)** | 6774.6445 ms | 6764.5343 ms | 6798.9103 ms | 6765.8342 ms | **Không khả thi** (Yêu cầu biết trước nhãn Ground Truth tập Test) |
-
-*Nhận xét:* Thuật toán **POT (Peak-Over-Threshold)** dựa trên Thuyết Giá trị Cực trị đạt sự cân bằng tối ưu tuyệt đối khi chỉ tốn trung bình **~18-20 ms** trên mỗi vòng bi để hiệu chuẩn ngưỡng thích ứng, đồng thời mang lại chỉ số F1 cực kỳ tiệm cận với ngưỡng Optimal lý thuyết (ngưỡng Optimal yêu cầu quét toàn bộ nhãn Ground Truth của tập Test, không khả thi trong thực tế trực tuyến). Điều này khẳng định POT là giải pháp hiệu chuẩn ngưỡng tối ưu nhất cho hệ thống giám sát và chẩn đoán lỗi vòng bi online thời gian thực.
-
----
-
-### 6.4. Nghiên cứu bóc tách các thành phần (Ablation Study)
-Để chứng minh khoa học vai trò của từng thành phần kiến trúc, thực nghiệm tiến hành huấn luyện từ đầu 4 biến thể của Mamba-Hybrid trên dữ liệu vòng đời vòng bi:
-
-<div align="center">
-<div style="max-width: 450px;">
+**Kết luận bóc tách:**
+* Tích hợp Phân rã Chuỗi (Variant 2 vs 1): Tăng F1-Score từ 93.50% lên 94.19%, giảm sai số Test MSE từ 3.2838 xuống 3.2066.
+* Tích hợp Phân mảnh Patching (Variant 3 vs 2): Tiết kiệm tới **86.2% VRAM huấn luyện** (từ 2859 MB xuống 394 MB) và tăng tốc độ huấn luyện lên **5.0 lần** (từ 217 s xuống 43 s/epoch) nhờ nén độ dài chuỗi token.
+* Tích hợp 1D CNN lọc nhiễu (Variant 4 vs 3): Tối ưu hóa Test MSE xuống mức thấp nhất (**3.1454**) và giảm độ trễ suy luận xuống **0.1651 ms/mẫu**.
 
 ```mermaid
-flowchart TD
-    subgraph Ablation["ANOMALY SCORE FLOW (30% - 100% VÒNG ĐỜI)"]
-        direction TB
-        A["<b>(A) Vanilla Mamba-CNN</b><br>⚡ ⚡ ⚡ ⚡ ⚡ ⚡ ⚡ ⚡ ⚡ ⚡<br><i>(Nhiều báo động giả<br>ở giai đoạn đầu)</i>"]
-        B["<b>(B) Decomposition-Only</b><br>____________________ ⚡<br><i>(MSE phẳng mượt<br>nhưng báo động trễ)</i>"]
-        C["<b>(C) Stats-Only</b><br>_.~'~._.~'~._.~'~. ⚡<br><i>(Nhạy xung nhưng<br>nhiễu răng cưa lớn)</i>"]
-        D["<b>(D) Proposed</b><br><b>(Mamba-Hybrid)</b><br>__________________ ⚡<br><i>(Tối ưu: Mượt mà<br>và báo sớm nhạy bén)</i>"]
-        
-        A ~~~ B ~~~ C ~~~ D
-    end
-    style A fill:#ffe6e6,stroke:#ff9999,stroke-width:1px
-    style B fill:#fff2cc,stroke:#ffe599,stroke-width:1px
-    style C fill:#fce4d6,stroke:#f8cbad,stroke-width:1px
-    style D fill:#e2f0d9,stroke:#a9d18e,stroke-width:1px
+flowchart LR
+    V1["<b>Variant 1</b><br>SimpleMamba<br>VRAM: 2859 MB<br>Lat: 1.05 ms"] -->|"+ Phân rã EMA"| V2["<b>Variant 2</b><br>MambaDecomp<br>F1 tăng +0.7%<br>Test MSE giảm"]
+    V2 -->|"+ Patching (P16,S8)"| V3["<b>Variant 3</b><br>+ Patch Embedding<br>VRAM giảm 86%<br>Tốc độ tăng 5x"]
+    V3 -->|"+ 1D CNN cục bộ"| V4["<b>Variant 4</b><br><b>PhyDecoMamba</b><br>Test MSE min (3.14)<br>Lat: 0.16 ms"]
+
+    style V1 fill:#ffebee,stroke:#c62828,stroke-width:1px
+    style V2 fill:#fff8e1,stroke:#f57f17,stroke-width:1px
+    style V3 fill:#e8f5e9,stroke:#2e7d32,stroke-width:1px
+    style V4 fill:#e0f2f1,stroke:#00695c,stroke-width:2px
 ```
 
-</div>
-</div>
+### 8.4. Phức tạp Tính toán, Độ trễ và Bộ nhớ VRAM Thực tế trên GPU Tesla T4
+Hồ sơ đo lường tài nguyên thực tế được kiểm chứng trên GPU NVIDIA Tesla T4 ở các cấu hình Batch Size (BS) 64 và 1024 (Bảng 6):
 
-*Ký hiệu ⚡ đại diện cho thời điểm điểm dị thường vượt ngưỡng POT kích hoạt còi báo động.*
+**Bảng 6. Mức tiêu thụ tài nguyên và hồ sơ độ trễ suy luận trên GPU Tesla T4 (Table 6 trong bài báo gốc).**
 
-* **Biến thể A: Vanilla Mamba-CNN (Không Decomposition, không Stats):**
-  * *Hành vi:* Điểm dị thường (Anomaly Score) dao động cực kỳ mạnh ngay từ giai đoạn khỏe mạnh ban đầu (30% - 60% vòng đời), liên tục cắt qua ngưỡng POT gây ra vô số báo động giả (False Alarms).
-* **Biến thể B: Decomposition-Only (Bật Decomposition, tắt Stats):**
-  * *Hành vi:* Triệt tiêu hoàn toàn nhiễu dao động cơ học. Đường Anomaly Score phẳng và mượt tuyệt đối ở giai đoạn khỏe mạnh ban đầu, chống 100% cảnh báo giả. Tuy nhiên, do thiếu thông tin vật lý định hướng, mô hình phản ứng rất chậm, chỉ vượt ngưỡng POT ở giai đoạn cuối cực kỳ nặng (mốc 90% vòng đời).
-* **Biến thể C: Stats-Only (Tắt Decomposition, bật Stats):**
-  * *Hành vi:* Cực kỳ nhạy bén với xung va đập vi mô đầu tiên (mốc 82% vòng đời ngay khi Kurtosis tăng vọt), mang lại lead time cảnh báo rất sớm. Nhưng đường Anomaly Score vẫn bị mấp mô răng cưa lớn.
-* **Biến thể D: Proposed (Mamba-Hybrid - Bật cả hai module):**
-  * *Hành vi:* Đạt sự cộng hưởng hoàn hảo tuyệt đối. Điểm dị thường phẳng lặng hoàn toàn trong 80% vòng đời đầu tiên (không False Alarm nhờ lọc Decomposition) và tăng vọt vượt ngưỡng POT một cách dứt khoát tại chính xác mốc 82% ngay khi chỉ báo Kurtosis nét đứt màu cam bắt đầu nhô lên đột ngột. Cung cấp khoảng thời gian cảnh báo sớm (Lead Time) lên tới **18% toàn bộ vòng đời thiết bị** một cách cực kỳ tin cậy.
+| Mô hình (Model) | Batch Size (BS) | Peak VRAM (MB) | Total Latency (ms/sample) | Inference Latency (ms/sample) |
+| :--- | :---: | :---: | :---: | :---: |
+| **LSTM** | 64 | **145.9 MB** | 14.1804 ms | 14.1646 ms |
+| **Simple-Mamba** | 64 | 2023.3 MB | 5.6823 ms | 5.6641 ms |
+| **PatchTST** | 64 | 1335.4 MB | $\underline{2.0576}\text{ ms}$ | $\underline{2.0382}\text{ ms}$ |
+| **PhyDecoMamba** | **64** | $\underline{215.9}\text{ MB}$ | 3.9426 ms | 3.9245 ms |
+| **PhyDecoMamba** | **1024** | 3253.6 MB | $\mathbf{1.0086}\text{ ms}$ | $\mathbf{0.9973}\text{ ms}$ |
+
+**Đánh giá ưu thế phần cứng:**
+* Ở Batch Size 64, PhyDecoMamba chỉ tiêu thụ **215.9 MB VRAM**, giảm tới **83.8% so với PatchTST (1335.4 MB)** và **89.3% so với Simple-Mamba (2023.3 MB)**.
+* Ở Batch Size 1024 (cấu hình thông lượng cao cho trung tâm giám sát công nghiệp), độ trễ trên mỗi mẫu của PhyDecoMamba giảm xuống mức siêu tốc **1.0086 ms/mẫu** (tăng tốc thông lượng nội bộ 3.9 lần), nhanh gấp **2 lần so với PatchTST** ở BS 64.
+* Đáng chú ý, ở Batch Size 512, PatchTST lập tức bị lỗi tràn bộ nhớ (OOM) do chi phí ma trận Attention $\mathcal{O}(N^2)$, trong khi PhyDecoMamba chỉ tiêu tốn 1629.8 MB VRAM (tiết kiệm 6.5 lần), khẳng định tính khả thi vượt bậc cho hệ thống giám sát đa kênh thời gian thực.
+
+### 8.5. Thời gian Hiệu chuẩn Ngưỡng Động (Calibration Overhead)
+Thực nghiệm đo lường thời gian thực tế để thiết lập ngưỡng báo động trên phân đoạn dữ liệu khỏe mạnh:
+* Thuật toán **POT** chỉ tiêu tốn trung bình **23.51 ms / vòng bi** để khớp phân phối GPD và ấn định ngưỡng động $T_{\text{dny}}$.
+* Tốc độ này nhanh gấp **53 lần** so với phương pháp Gaussian Mixture Model (GMM, tốn 1248.05 ms) và nhanh gấp **323 lần** so với phương pháp tìm kiếm ngưỡng tối ưu ngoại tuyến (Offline Optimal Search, tốn 7597.00 ms).
+* Nhờ đó, POT hoàn toàn có thể chạy tự hiệu chuẩn liên tục (Continuous Self-Calibration) ngay trên thiết bị biên mà không gây gián đoạn luồng xử lý dữ liệu rung động.
+
+### 8.6. Phân tích Độ nhạy Đặc trưng Vật lý (Feature Sensitivity Analysis)
+Phân tích độ nhạy tại thời điểm suy luận bằng phương pháp che mờ zero-out từng đặc trưng trong Stats Head:
+* Các đặc trưng **Shape Factor (Hệ số dạng)** và các chỉ báo năng lượng rung động đóng góp mạnh mẽ nhất vào tính ổn định dự báo (khi làm mờ, sai số Test MSE tăng vọt lên tới **+5.32%**).
+* Kết quả này chứng minh rằng đầu thống kê vật lý không phải là thành phần hình thức, mà trực tiếp dẫn đường và ổn định hóa không gian biểu diễn ẩn của Mamba theo các quy luật cơ học phá hủy vật liệu.
 
 ---
 
-## 7. ĐỊNH HƯỚNG PHÁT TRIỂN KHÔNG GIAN TƯƠNG LAI (FUTURE DIRECTIONS)
+## 9. HẠN CHẾ NGHIÊN CỨU & ĐỊNH HƯỚNG PHÁT TRIỂN TƯƠNG LAI
 
-Nhằm nâng cấp hệ thống chẩn đoán lên các mức độ chính xác và khả thi ứng dụng cao hơn nữa, các hướng cải tiến sau được đề xuất:
+### 9.1. Ba hạn chế khoa học (Research Limitations)
+1. **Khả năng tổng quát hóa dưới điều kiện tải động (Generalization under dynamic profiles):** Thực nghiệm hiện tại tập trung kiểm chứng trên vận tốc quay và tải trọng không đổi trong từng chu trình; khả năng thích ứng dưới các biên dạng vận tốc - tải trọng biến thiên đột ngột cần được kiểm chứng thêm.
+2. **Bỏ qua tương quan không gian liên kênh (Cross-channel phase dependencies):** Mô hình áp dụng kiến trúc Channel-Independent (CI) để triệt tiêu sự lan truyền nhiễu liên kênh, điều này đồng nghĩa với việc mối tương quan góc pha không gian giữa các trục cảm biến (X, Y) chưa được mô hình hóa tường minh.
+3. **Kiểm thử trên phần cứng nhúng biên vật lý (Physical Edge Hardware Deployment):** Các chỉ số VRAM và độ trễ mới được đo lường dưới các ràng buộc mô phỏng trên GPU NVIDIA Tesla T4; việc triển khai và tối ưu hóa lượng tử hóa (Quantization INT8/FP16) trên các vi điều khiển hoặc máy tính nhúng thực tế (như Raspberry Pi 5, NVIDIA Jetson Orin Nano) là bước đi cần thiết tiếp theo.
 
-1. **Nâng cấp lên Mamba-2 (Structured State Space Duality - SSD):** Tích hợp kiến trúc Mamba-2 thế hệ mới nhằm tận dụng cấu trúc song song hóa ma trận bán tách rời (semiseparable matrices), tăng tốc độ huấn luyện thêm gấp 2-5 lần trên các chuỗi thời gian siêu dài.
-2. **Học tương quan đa trục đa kênh (Cross-channel Correlation Modeling):** Chuyển từ chế độ Channel-Independent (CI) đơn giản sang cơ chế học tương quan liên kênh (Cross-channel). Tích hợp cơ chế Attention chéo kiểu iTransformer giữa các trục cảm biến rung động đa chiều (X, Y, Z) để bắt được các lỗi có tính hướng biến dạng không gian.
-3. **Phân tích miền tần số sâu sắc (Frequency Domain Integration):** Áp dụng biến đổi Fourier nhanh (FFT) hoặc biến đổi Wavelet liên tục (CWT) trực tiếp vào trong khối chuyển đổi trạng thái của Mamba (tương tự như TimesNet hoặc FreTS) để mô hình hóa trực tiếp các tần số lỗi cơ học đặc thù (BPFI, BPFO, BSF) của vòng bi.
-4. **Học đa nhiệm tích hợp (Multi-task Loss Optimization):** Thiết lập hàm tổn thất đa mục tiêu kết hợp đồng thời bài toán **Dự báo (Forecasting)** và bài toán **Tái tạo (Reconstruction)** nhằm nâng cao khả năng biểu diễn không gian trạng thái tiềm ẩn (latent space), giúp mô hình nhạy bén hơn nữa trước các dị thường vi mô.
-5. **Cơ chế Phân tách nâng cao (Advanced Signal Decomposition):** Thay thế bộ lọc Moving Average đơn giản bằng các thuật toán phân tách tín hiệu nâng cao có tính thích nghi cao như Wavelet Packet Decomposition hoặc Empirical Mode Decomposition (EMD) để tách lọc triệt để hơn nữa các thành phần tiếng ồn công nghiệp bên ngoài.
+### 9.2. Định hướng mở rộng tương lai (Future Directions)
+* **Nâng cấp lên Mamba-2 (SSD):** Tích hợp kiến trúc Mamba-2 thế hệ mới dựa trên lý thuyết Đối ngẫu Không gian Trạng thái Cấu trúc (State Space Duality), tăng tốc độ huấn luyện và suy luận ma trận bán tách rời lên 2–5 lần.
+* **Cơ chế Attention Không gian - Thời gian Liên trục (Cross-channel Spatial Attention):** Bổ sung một nhánh Attention nhẹ liên trục (kiểu iTransformer) sau khi Mamba đã lọc sạch nhiễu ở từng kênh riêng lẻ.
+* **Tích hợp Biến đổi Tần số (Wavelet / STFT):** Nhúng trực tiếp các đặc trưng miền tần số đặc thù của vòng bi (tần số khuyết tật vòng trong BPFI, vòng ngoài BPFO, con lăn BSF) vào cơ chế quét của SSM.
+* **Tối ưu hóa nhúng biên (Edge Microcontroller Deployment):** Lượng tử hóa mô hình xuống INT8 và biên dịch bằng TensorRT-LLM / ONNX Runtime để nạp trực tiếp vào các cảm biến rung động IoT thông minh gắn tại hiện trường nhà máy.
 
 ---
+
+## 10. TỔNG KẾT (CONCLUSION)
+
+Khung kiến trúc **PhyDecoMamba** đã chứng minh sự thành công vượt bậc trong việc kết hợp hài hòa giữa:
+1. **Mô hình học sâu thế hệ mới:** Mamba SSM với độ phức tạp tuyến tính $\mathcal{O}(N)$ giải quyết triệt để nút thắt tài nguyên của Transformer.
+2. **Tri thức cơ học vật lý:** Bộ lọc phân rã chuỗi thích ứng EMA và đầu trích xuất thống kê 8 chiều dẫn đường cho biểu diễn ẩn.
+3. **Quy chuẩn đánh giá khoa học nghiêm ngặt:** Hiệu chuẩn ngưỡng động POT/EVT kháng rò rỉ dữ liệu cùng quy tắc tương đương ngân sách tham số phần cứng.
+
+Công trình không chỉ mang lại đóng góp học thuật quan trọng cho lĩnh vực Chẩn đoán và Tiên lượng Sức khỏe Thiết bị (PHM), mà còn cung cấp một giải pháp công nghệ hoàn chỉnh, sẵn sàng triển khai trên các thiết bị giám sát nhúng thời gian thực tại các nhà máy công nghiệp thông minh 4.0.
